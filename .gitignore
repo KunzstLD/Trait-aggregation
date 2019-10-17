@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Rproj data
+*.Rproj
+
+# Data folder
+Data/
