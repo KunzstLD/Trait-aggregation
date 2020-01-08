@@ -13,12 +13,18 @@ Trait_AUS <- readRDS(
 )
 
 # search for candidate families
-Trait_AUS[, .(.N), by = family] %>% 
-  .[order(N), ] %>% 
+Trait_AUS[, .(.N), by = family] %>%
+  .[order(N), ] %>%
   tail(., n = 20)
 
-# create subset 
-candidates <- c("Chironomidae", "Elmidae", "Dytiscidae", "Ceratopogonidae", "Tipulidae")
+# create subset
+candidates <- c(
+  "Chironomidae",
+  "Elmidae",
+  "Dytiscidae",
+  "Ceratopogonidae",
+  "Tipulidae"
+)
 
 AUS_subset <- Trait_AUS[!is.na(genus), ] %>%
   melt(., id.vars = c("unique_id", "species", "genus", "family", "order")) %>%
@@ -38,3 +44,6 @@ AUS_subset <- Trait_AUS[!is.na(genus), ] %>%
                                  "genus",
                                  "family",
                                  "order")]))
+
+# remove unique_id
+AUS_subset[, unique_id := NULL]
