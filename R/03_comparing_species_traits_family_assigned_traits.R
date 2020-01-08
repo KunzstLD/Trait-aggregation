@@ -1,11 +1,11 @@
-# ----------------------------------------------------------------------------
+# _____________________________________________________________________________
 #### Aggregation ####
 # Here two trait aggregation methods are compared 
 # to traits assigned on family level
-# ----------------------------------------------------------------------------
+# _____________________________________________________________________________
 
 # how many entries per family get aggregated
-AST_subset[, .N, by = family]
+AST_subset[, .N, by = .(genus, family)]
 
 # First aggregation step -> Median
 
@@ -78,9 +78,9 @@ test_AST <- Trait_AST_preproc[is.na(Species) &
 # gills -> resp_gil
 # small, medium, large
 
-# ----------------------------------------------------------------------------
+# _____________________________________________________________________________
 #### Analysis
-# ----------------------------------------------------------------------------
+# _____________________________________________________________________________
 
 # pattern
 pattern <- "(?i)shredder|scraper|predator|gatherer|filter|small|medium|large"
