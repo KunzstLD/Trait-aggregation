@@ -1,6 +1,18 @@
+# _____________________________________________________________
+#### Data preparation ####
+# _____________________________________________________________
 
-# ___________________________________________________________________________________
-# Get only complete trait data
+# load data from input path and store in list
+# and assigns name (according to filename)
+load_data <- function(path, pattern) {
+  files <- list.files(path = path, pattern = pattern)
+  data <- lapply(files, function(y) readRDS(file = file.path(path, y)))
+  data <- setNames(data, files)
+  data
+}
+
+# _______________________________________________________________________
+#### Get only complete trait data ####
 # from a dataset with traits and taxa information
 # get those traits that are complete (meaning at least one value different
 # from zero)
@@ -8,7 +20,7 @@
 # Can be merged together using Reduce!
 # works atm without considering NAs
 # non trait column need to be manually defined by user
-# ___________________________________________________________________________________
+# _______________________________________________________________________
 get_complete_trait_data <- function(trait_data, non_trait_col) {
 
   # pattern of non trait col names
@@ -132,11 +144,12 @@ completeness_trait_data <- function(x, non_trait_cols) {
   return(output)
 }
 
-# ___________________________________________________________________________________
+# ___________________________________________________________________
 #### Trait Aggregation ####
+# ___________________________________________________________________
+
 # Mode
 # when there are no duplicate values, mode returns the first value!
-# ___________________________________________________________________________________
 Mode <- function(x, na.rm = FALSE) {
   if (na.rm) {
     x <- x[!is.na(x)]
@@ -144,3 +157,79 @@ Mode <- function(x, na.rm = FALSE) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))]
 }
+
+# Aggregation to family level by allocating species entries
+# to genus level using the median.
+# Aggregating to family level is done by mode or median
+# if no duplicate values occur
+spec_genus_agg <- function(trait_data,
+                           non_trait_cols) {
+
+  # get names of trait columns
+  pat <- paste0(non_trait_cols, collapse = "|")
+  trait_col <- grep(pat, names(trait_data), value = TRUE, invert = TRUE)
+
+  # aggregate to genus level via median
+  # subset so that no NA values occur in species data
+  # (otherwise all NA entries are viewed as a group &
+  # aggregated as well)
+  trait_data_genus <- trait_data[!is.na(species),
+    lapply(.SD, median, na.rm = TRUE),
+    .SDcols = trait_col,
+    by = genus
+  ]
+
+  # merge family information back
+  trait_data_genus[trait_data[!is.na(species), ],
+    `:=`(
+      family = i.family,
+      order = i.order
+    ),
+    on = "genus"
+  ]
+
+  # bind with data resolved on genus level or family level
+  # TODO: Change this in scripts for Convergence of trait profile groups!
+  trait_data_genus <-
+    rbind(trait_data_genus, trait_data[is.na(species) & !is.na(family), ],
+      fill = TRUE
+    )
+
+  # aggregate to family level
+  trait_data_genus[, c(lapply(.SD, function(y) {
+    # for cases like c(0,1), c(0,0,1,1) and c(0,1,0.5)
+    if (length(unique(y)) == length(y) |
+      sum(duplicated(y)) == sum(!duplicated(y))) {
+      median(y, na.rm = TRUE)
+      # e.g. in case (0,0,3)
+      # } else if (Mode(y, na.rm = TRUE) == 0 & !all((y) == 0)) {
+      #   Mode(y[y != 0], na.rm = TRUE)
+    }
+    else {
+      Mode(y, na.rm = TRUE)
+    }
+  }), .N),
+  .SDcols = trait_col,
+  by = "family"
+  ]
+}
+
+# direct aggregation to family level
+direct_agg <- function(trait_data,
+                       non_trait_cols) {
+  # get names of trait columns
+  pat <- paste0(non_trait_cols, collapse = "|")
+  trait_col <- grep(pat, names(trait_data), value = TRUE, invert = TRUE)
+
+  # aggregate to genus level via median
+  # subset so that no NA values occur in species data
+  # (otherwise all NA entries are viewed as a group &
+  # aggregated as well)
+  trait_data[, lapply(.SD, median, na.rm = TRUE),
+    .SDcols = trait_col,
+    by = family
+  ]
+}
+
+# TODO: Monitor subset data (how many entries in species/genus)
+# TODO: Weigthing?
