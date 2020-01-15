@@ -3,7 +3,6 @@
 # 2) Species - Family
 # TODO:
 # Provide Details on aggregation methods
-# Write functions for aggregation
 # compare accross regions
 
 # Methods used:
@@ -16,8 +15,9 @@
 # binary coded data
 # binary data transformed to fuzzy coded (on genus level, by nr. of species)
 
-# _________________________________________________________________________
-#### 1) Species - Genus - Family (using Mode) ####
+# _____________________________________________________________________________
+#### Aggreagation ####
+# 1) Species - Genus - Family (using Mode) ####
 # - Aggregation procedure:
 # Median to Genus/
 # Mode for Family
@@ -27,49 +27,82 @@
 # Poff et al. 2006: most common genus-level modality assigned (genus level
 # trait data with family-level monitoring data)
 # which(table(AUS_subset$genus) == max(table(AUS_subset$genus), na.rm = TRUE))
-# _________________________________________________________________________
+# _____________________________________________________________________________
 
-# get names of trait columns
-trait_col <- names(AUS_subset[, -c("family",
-                                  "genus",
-                                  "species",
-                                  "order")])
+# aggregation over genus level
+data_complex_agg <- lapply(preproc_dat, function(y) {
+  spec_genus_agg(
+    trait_data = y,
+    non_trait_cols = c(
+      "order",
+      "family",
+      "genus",
+      "species"
+    )
+  ) %>%
+    data.table::melt(., id.vars = c("family", "N")) %>%
+    setnames(.,
+      old = c("value"),
+      new = c("value_genus_fam_agg")
+    )
+})
 
-# subset so that no NA values occur in Species data
-# (otherwise all NA entries are viewed as a group &
-# aggregated as well)
-AUS_subset[!is.na(species),
-    (trait_col) := lapply(.SD, median, na.rm = TRUE),
-    .SDcols = trait_col,
-    by = genus
-]
+# Aggregation directly to family level
+data_direct_agg <- lapply(preproc_dat, function(y) {
+  y[!is.na(family), ] %>%
+  direct_agg(
+    trait_data = .,
+    non_trait_cols = c(
+      "order",
+      "family",
+      "genus",
+      "species"
+    )
+  ) %>%
+    data.table::melt(., id.vars = c("family")) %>%
+    setnames(.,
+      old = c("value"),
+      new = c("value_direct_agg")
+    )
+})
 
-# _________________________________________________________________________
-#### Aggregate to family level ####
-# take mode if duplicates, otherwise maximum
-# test <- AUS_subset_genus[, lapply(.SD, Mode, na.rm = TRUE),
-#                .SDcols = names(AUS_subset_genus) %like% "^temp",
-#                by = "family"]
-# Trait_fam <- AUS_subset_genus[, c(lapply(.SD, function(y) {
-#   if (length(unique(y)) == length(y) & length(y) > 1) {
-#     max(y)
-#   } else {
-#     Mode(x = y)
-#   }
-# }), .N),
-# .SDcols = names(AUS_subset_genus) %like% pat_traitname,
-# by = family]
-# _________________________________________________________________________
-AUS_subset[, c(lapply(.SD, function(y) {
-  if (length(unique(y)) == length(y) & length(y) > 1) {
-    max(y, na.rm = TRUE)
-    # e.g. in case (0,0,3)
-  } else if (Mode(y, na.rm = TRUE) == 0 & !all((y) == 0))  {
-    Mode(y[y != 0], na.rm = TRUE)
-  }
-  else{
-    Mode(y, na.rm = TRUE)
-  }
-}), .N),
-.SDcols = trait_col,
-by = "family"]
+# _____________________________________________________________________________
+#### Analysis ####
+# _____________________________________________________________________________
+
+# resulted lists have the same row order -> can be bind
+results_agg <- mapply(function(x, y) merge(x, y, by = c("family", "variable")),
+  data_complex_agg,
+  data_direct_agg,
+  SIMPLIFY = FALSE
+)
+
+# calculate deviance
+results_agg <- lapply(
+  results_agg,
+  function(y) y[, deviance := value_genus_fam_agg - value_direct_agg]
+)
+
+# How many taxa end up with different trait values after aggregation?
+lapply(results_agg, function(y) {
+  (nrow(y[deviance != 0, ]) / nrow(y)) * 100
+})
+
+# families where aggregation methods yield different trait values
+lapply(results_agg, function(y) y[deviance != 0, ])
+lapply(results_agg, function(y) y[deviance > 0, ])
+lapply(results_agg, function(y) y[deviance < 0, ])
+
+# families where trait values diverge that occur in several datasets?
+lapply(results_agg, function(y) y[deviance != 0, .(family)]) %>%
+  rbindlist(., idcol = "file") %>%
+  dcast(., formula = family ~ file) %>%
+  .[Trait_AUS_harmonized.rds != 0 & Traits_US_LauraT_pp_harmonized.rds != 0 &
+  Trait_NZ_pp_harmonized.rds != 0 & Trait_EU_pp_harmonized.rds != 0, ]
+
+# specific traits where traits diverge more often?
+lapply(results_agg, function(y) y[deviance != 0, .(family, variable)]) %>%
+  rbindlist(., idcol = "file") %>%
+  dcast(., formula = variable ~ file) %>%
+  .[Trait_AUS_harmonized.rds != 0 & Traits_US_LauraT_pp_harmonized.rds != 0 &
+    Trait_NZ_pp_harmonized.rds != 0 & Trait_EU_pp_harmonized.rds != 0, ]
