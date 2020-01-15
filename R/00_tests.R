@@ -41,3 +41,46 @@ x <- c(4, 1 , 1, 2, 2, 0, 0, 3)
 ux <- unique(x)
 ux[which.max(tabulate(match(x, ux)))]
 ? which.max()
+
+
+
+#--------------------------------------------------------------------------------------
+# test <- AUS_subset[grepl("Dytiscidae", family), .(volt_bi_multi, volt_semi, volt_uni, 
+#                                           species, genus, family, order)]
+# AUS_subset[grepl("Hydrophilidae", family), ]
+Trait_AUS[, .(nr_families = .N), 
+          by = .(family)] %>% 
+  .[order(nr_families),]
+
+test <- Trait_AUS[grepl("Hydroptilidae", family), .(resp_gil, resp_pls,
+                                                    resp_spi, resp_teg,
+                                                    species, genus,
+                                                    family, order)]
+# change frequency of an affinity score
+# into probability per genus
+# -> category zero is no category?
+test[, .(resp_gil_fc = as.factor(resp_gil),
+         species,
+         genus, 
+         family, 
+         order)] %>%
+#  .[resp_gil_fc != 0, ] %>% 
+  .[ , .(nr_genus = .N, 
+         resp_gil_fc, 
+         species, 
+         family, 
+         order), 
+     by = .(genus)] %>% 
+  .[, .(nr_categ_per_trait = .N, 
+        nr_genus, 
+        species,
+        genus,
+        family,
+        order), 
+    by = .(genus, resp_gil_fc)] %>% 
+  .[, .(prob = nr_categ_per_trait/nr_genus,
+        resp_gil_fc,
+        species,
+        genus,
+        family,
+        order)]
