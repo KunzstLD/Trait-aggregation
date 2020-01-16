@@ -2,7 +2,7 @@
 #### Preprocessing ####
 # _________________________________________________________________________
 
-trait_dat <- load_data(path = "./Data/", pattern = ".*rds")
+trait_dat <- load_data(path = "./Data/", pattern = "harmonized\\.rds")
 
 preproc_dat <- trait_dat %>%
   lapply(., function(y) {
