@@ -83,7 +83,7 @@ results_agg <- lapply(
   function(y) y[, deviance := value_genus_fam_agg - value_direct_agg]
 )
 
-# How many taxa end up with different trait values after aggregation?
+# How many taxa end up with different trait values after aggregation?(%)
 lapply(results_agg, function(y) {
   (nrow(y[deviance != 0, ]) / nrow(y)) * 100
 })
@@ -100,9 +100,49 @@ lapply(results_agg, function(y) y[deviance != 0, .(family)]) %>%
   .[Trait_AUS_harmonized.rds != 0 & Traits_US_LauraT_pp_harmonized.rds != 0 &
   Trait_NZ_pp_harmonized.rds != 0 & Trait_EU_pp_harmonized.rds != 0, ]
 
-# specific traits where traits diverge more often?
+# specific traits that diverge more often?
 lapply(results_agg, function(y) y[deviance != 0, .(family, variable)]) %>%
   rbindlist(., idcol = "file") %>%
   dcast(., formula = variable ~ file) %>%
   .[Trait_AUS_harmonized.rds != 0 & Traits_US_LauraT_pp_harmonized.rds != 0 &
     Trait_NZ_pp_harmonized.rds != 0 & Trait_EU_pp_harmonized.rds != 0, ]
+
+#### Plotting deviance data ####
+
+# Example
+results_aus <- results_agg[["Trait_AUS_harmonized.rds"]]
+
+results_aus[order %in% c("Ephemeroptera"), ] %>%
+  ggplot(., aes(
+    x = as.factor(variable), y = deviance_complex_direct_agg,
+    label = deviance_complex_direct_agg
+  )) +
+  geom_point(stat = "identity", aes(col = family), size = 8) +
+  geom_text(color = "white", size = 3) +
+  labs(
+    title = "Comparison complex aggregation vs direct aggregation",
+    y = "Deviance in trait values",
+    x = "Trait states"
+  ) +
+  ylim(-1.5, 1.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  coord_flip() +
+  facet_wrap(~family) +
+  theme(
+    axis.title = element_text(size = 12),
+    axis.text.x = element_text(family = "Roboto Mono", size = 9),
+    #### For altering USGS trait databases
+    ## goal: summarize trait information into one line per genus
+    ## data is trimmed to only genera found in the Grand Lake Meadows
+
+    axis.text.y = element_text(family = "Roboto Mono", size = 9),
+    legend.text = element_text(size = 11),
+    legend.title = element_blank()
+  )
+
+# save
+ggsave(
+  filename = "Trait_agg.png", plot = last_plot(),
+  path = file.path(data_out),
+  dpi = 400
+)
