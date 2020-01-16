@@ -1,150 +1,103 @@
 # _____________________________________________________________________________
 #### Aggregation ####
-# Here two trait aggregation methods are compared 
+# Here two trait aggregation methods are compared
 # to traits assigned on family level
-# _____________________________________________________________________________
-
-# how many entries per family get aggregated
-AST_subset[, .N, by = .(genus, family)]
-
-# First aggregation step -> Median
-
-# create name pattern to choose traits
-pat_traitname <- paste(trait_col, collapse = "|")
-
-# subset so that no NA values occur in Species data (otherwise all NA entries are viewed as a group &
-# aggregated as well)
-AST_subset_genus <- AST_subset[!is.na(species), lapply(.SD, median),
-                               .SDcols = names(AST_subset) %like% pat_traitname,
-                               by = genus]
-
-# merge family information back
-AST_subset_genus[AST_subset[!is.na(species),],
-                 `:=`(family = i.family,
-                      order = i.order,
-                      unique_id = i.unique_id),
-                 on = "genus"]
-
-# aggregate on family level
-AST_subset_fam <- AST_subset_genus[, c(lapply(.SD, function(y) {
-  if (length(unique(y)) == length(y) & length(y) > 1) {
-    max(y)
-    # e.g. in case (0,0,3)
-  } else if (Mode(y) == 0 & !all((y) == 0)) {
-    Mode(y[y != 0])
-  }
-  else {
-    Mode(y)
-  }
-})),
-.SDcols = names(AST_subset_genus) %like% pat_traitname,
-by = "family"]
-
-
-# compare to data resolved on family level -> check original data
-# load preprocessed but not harmonized dataset
-Trait_AST_preproc <- readRDS(
-  file = file.path(
-    data_in,
-    "Australian",
-    "Trait_analysis",
-    "Cache_preproc",
-    "Trait_AST_preproc.rds"
-  )
-)
-
-# just use Chessman traits for the beginning 
-vec <- Trait_AST_preproc[is.na(Species) &
-                           is.na(Genus) & Family %in% candidates, .SD,
-                         .SDcols = names(Trait_AST_preproc) %like% paste("fam.*Chessman|Family")] %>%
-  .[, apply(.SD, 1, function(y)
-    sum(y) > 0),
-    .SDcols = !(names(.) %like% "Family")]
-
-test_AST <- Trait_AST_preproc[is.na(Species) &
-                                is.na(Genus) &
-                                Family %in% candidates, .SD,
-                              .SDcols = names(Trait_AST_preproc) %like% paste("fam.*Chessman|Family")] %>%
-  .[vec,]
-
-
-# shredder
-# scraper
-# predator
-# gatherer
-# filter 
+# ?For later, include respiration information:
 # functional spiracles -> resp_spi
 # air respiration   -> resp_spi
 # gills -> resp_gil
-# small, medium, large
+# TODO check rows with just zeros
+# _____________________________________________________________________________
+
+chessman_raw <- read_excel(
+  path = file.path(
+    ".",
+    "Data",
+    "Chessman part 2.xlsx"
+  ),
+  skip = 1
+)
+setDT(chessman_raw)
+
+# subset to feeding information, taxonomical information & size
+chessman_raw <- chessman_raw[, .SD,
+  .SDcols = names(chessman_raw) %like% "Order|Family|.*feeding|.*length"
+]
+
+# Classify continuous varibale length as size
+chessman_raw[, `:=`(
+  size_small = ifelse(`Maximum length (mm)` < 9,
+    1, 0
+  ),
+  size_medium = ifelse(
+    `Maximum length (mm)` >= 9 &
+      `Maximum length (mm)` <= 16,
+    1,
+    0
+  ),
+  size_large = ifelse(`Maximum length (mm)` > 16,
+    1, 0
+  )
+)]
+
+# change col names so that data can be merged
+# with results from other aggregations
+setnames(chessman_raw,
+  old = c(
+    "Order",
+    "Family",
+    "Shredder (proportion of feeding)",
+    "Scraper (proportion of feeding)",
+    "Predator (proportion of feeding)",
+    "Gatherer (proportion of feeding)",
+    "Filterer (proportion of feeding)"
+  ),
+  new = c(
+    "order",
+    "family",
+    "feed_shredder",
+    "feed_herbivore",
+    "feed_predator",
+    "feed_gatherer",
+    "feed_filter"
+  )
+)
+
+# del maximum length variable
+chessman_raw[, `Maximum length (mm)` := NULL]
+
+# transform to lf
+chessman_raw <- melt(chessman_raw, id.vars = c("family", "order"))
+
+# combine with results from other aggregation methods
+traitval_aus <- merge(
+  results_agg[["Trait_AUS_harmonized.rds"]],
+  chessman_raw,
+  by = c("family", "variable")
+)
+
+setnames(traitval_aus,
+  old = c(
+    "deviance",
+    "value"
+  ),
+  new = c(
+    "deviance_complex_direct_agg",
+    "value_famlvl"
+  )
+)
 
 # _____________________________________________________________________________
 #### Analysis
+# TODO restrict to certain orders
 # _____________________________________________________________________________
 
-# pattern
-pattern <- "(?i)shredder|scraper|predator|gatherer|filter|small|medium|large"
+# For Australia
+traitval_aus[, `:=`(
+  deviance_dir_fam = value_direct_agg - value_famlvl,
+  deviance_comp_fam = value_genus_fam_agg - value_famlvl
+)]
 
-# introduce key column
-setnames(AST_subset_fam,
-         old = "feed_filter",
-         new = "feed_filterer")
-
-AST_subset_fam <- AST_subset_fam %>%
-  melt(., id.vars = c("family")) %>%
-  .[variable %like% pattern,] %>%
-  .[, key := tolower(sub("(.*)(\\_)(.*)", "\\3", variable))]
-
-setnames(test_AST,
-         old = c("Family",
-                 "size_small_fam_Chessman",
-                 "size_medium_fam_Chessman",
-                 "size_large_fam_Chessman"),
-         new = c("family",
-                 "small_fam_Chessman",
-                 "medium_fam_Chessman",
-                 "large_fam_Chessman"),
-         skip_absent = TRUE)
-
-test_AST <- test_AST %>% melt(.) %>%
-  .[variable %like% pattern,] %>%
-  .[, key := tolower(sub("(?=\\_)(\\w+)", "", variable, perl = TRUE))]
-
-# merge both & calc deviance between trait values
-AST_subset_fam[test_AST,
-               `:=`(dev_trait = value - i.value,
-                    value_fam_level = i.value),
-               on = c("family", "key")]
-
-# prepare & plot deviance data
-AST_subset_fam[, dev_trait := round(dev_trait, 2)] %>%
-  ggplot(., aes(x = as.factor(variable), y = dev_trait, label = dev_trait)) +
-  geom_point(stat = "identity", aes(col = family), size = 8) +
-  geom_text(color = "white", size = 3) +
-  labs(
-    title = "Comparison aggregated traits with at family-level assigned traits",
-    y = "Deviance in trait values",
-    x = "Trait states"
-  ) +
-  ylim(-1.5, 1.5) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  coord_flip() +
-  facet_wrap(~family) +
-  theme(
-    axis.title = element_text(size = 12),
-    axis.text.x = element_text(family = "Roboto Mono", size = 9), #### For altering USGS trait databases
-    ## goal: summarize trait information into one line per genus
-    ## data is trimmed to only genera found in the Grand Lake Meadows
-
-    axis.text.y = element_text(family = "Roboto Mono", size = 9),
-    legend.text = element_text(size = 11),
-    legend.title = element_blank()
-  )
-# save
-ggsave(
-  filename = "Trait_agg.png", plot = last_plot(),
-  path = file.path(data_out),
-  dpi = 400
-)
-# implement different Aggr. functions
-# search for further candidates
+# How many cases have been evaluated differently by Chessman?
+nrow(traitval_aus[deviance_dir_fam != 0, ])/nrow(traitval_aus)
+nrow(traitval_aus[deviance_comp_fam != 0, ])/nrow(traitval_aus)
