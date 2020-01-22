@@ -9,6 +9,8 @@
 # TODO check rows with just zeros
 # _____________________________________________________________________________
 
+
+#### AUS ####
 chessman_raw <- read_excel(
   path = file.path(
     ".",
@@ -73,7 +75,7 @@ chessman_raw <- melt(chessman_raw, id.vars = c("family", "order"))
 traitval_aus <- merge(
   results_agg[["Trait_AUS_harmonized.rds"]],
   chessman_raw,
-  by = c("family", "variable")
+  by = c("family", "variable", "order")
 )
 
 setnames(traitval_aus,
@@ -99,5 +101,27 @@ traitval_aus[, `:=`(
 )]
 
 # How many cases have been evaluated differently by Chessman?
-nrow(traitval_aus[deviance_dir_fam != 0, ])/nrow(traitval_aus)
-nrow(traitval_aus[deviance_comp_fam != 0, ])/nrow(traitval_aus)
+nrow(traitval_aus[deviance_dir_fam != 0, ]) / nrow(traitval_aus)
+nrow(traitval_aus[deviance_comp_fam != 0, ]) / nrow(traitval_aus)
+
+# Which traits?
+# feed_shredder 44 times classified differently
+# size_medium 43,....
+traitval_aus[deviance_comp_fam != 0, .(.N), by = c("variable"), ]
+traitval_aus[deviance_comp_fam != 0 & variable %in% "feed_shredder", ] %>%
+  .[, .(.N), by = order]
+
+# Which orders?
+# Diptera
+# Trichoptera
+# Coleoptera,...
+traitval_aus[deviance_comp_fam != 0, .(.N), by = c("order"), ] %>%
+  .[order(-N), ]
+
+# TODO: Make function out of this!
+# About 50 % of Diptera differently classified regarding the traits feeding and size
+nrow(traitval_aus[deviance_comp_fam != 0 & order %in% "Diptera", ])/nrow(traitval_aus[order %in% "Diptera", ])
+# 42 % of Trichoptera differently classified
+nrow(traitval_aus[deviance_comp_fam != 0 & order %in% "Trichoptera", ])/nrow(traitval_aus[order %in% "Trichoptera", ])
+# 29 % of Coleoptera differntly classified 
+nrow(traitval_aus[deviance_comp_fam != 0 & order %in% "Coleoptera", ])/nrow(traitval_aus[order %in% "Coleoptera", ])
