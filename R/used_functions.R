@@ -196,7 +196,7 @@ spec_genus_agg <- function(trait_data,
     )
 
   # aggregate to family level
-  trait_data_genus[, c(lapply(.SD, function(y) {
+  agg_data <- trait_data_genus[, c(lapply(.SD, function(y) {
     # for cases like c(0,1), c(0,0,1,1) and c(0,1,0.5)
     if (length(unique(y)) == length(y) |
       sum(duplicated(y)) == sum(!duplicated(y))) {
@@ -212,6 +212,13 @@ spec_genus_agg <- function(trait_data,
   .SDcols = trait_col,
   by = "family"
   ]
+
+  # merge information on order back
+  agg_data[trait_data,
+    `:=`(order = i.order),
+    on = "family"
+  ]
+  agg_data
 }
 
 # direct aggregation to family level
