@@ -40,7 +40,7 @@ data_complex_agg <- lapply(preproc_dat, function(y) {
       "species"
     )
   ) %>%
-    data.table::melt(., id.vars = c("family", "N")) %>%
+    data.table::melt(., id.vars = c("family", "order", "N")) %>%
     setnames(.,
       old = c("value"),
       new = c("value_genus_fam_agg")
@@ -50,16 +50,16 @@ data_complex_agg <- lapply(preproc_dat, function(y) {
 # Aggregation directly to family level
 data_direct_agg <- lapply(preproc_dat, function(y) {
   y[!is.na(family), ] %>%
-  direct_agg(
-    trait_data = .,
-    non_trait_cols = c(
-      "order",
-      "family",
-      "genus",
-      "species"
-    )
-  ) %>%
-    data.table::melt(., id.vars = c("family")) %>%
+    direct_agg(
+      trait_data = .,
+      non_trait_cols = c(
+        "order",
+        "family",
+        "genus",
+        "species"
+      )
+    ) %>%
+    data.table::melt(., id.vars = c("family", "order")) %>%
     setnames(.,
       old = c("value"),
       new = c("value_direct_agg")
@@ -70,8 +70,8 @@ data_direct_agg <- lapply(preproc_dat, function(y) {
 #### Analysis ####
 # _____________________________________________________________________________
 
-# resulted lists have the same row order -> can be bind
-results_agg <- mapply(function(x, y) merge(x, y, by = c("family", "variable")),
+# results merged
+results_agg <- mapply(function(x, y) merge(x, y, by = c("family", "variable", "order")),
   data_complex_agg,
   data_direct_agg,
   SIMPLIFY = FALSE
@@ -109,13 +109,13 @@ lapply(results_agg, function(y) y[deviance != 0, .(family, variable)]) %>%
 
 #### Plotting deviance data ####
 
-# Example
+# Example Australia
 results_aus <- results_agg[["Trait_AUS_harmonized.rds"]]
 
 results_aus[order %in% c("Ephemeroptera"), ] %>%
   ggplot(., aes(
-    x = as.factor(variable), y = deviance_complex_direct_agg,
-    label = deviance_complex_direct_agg
+    x = as.factor(variable), y = deviance,
+    label = deviance
   )) +
   geom_point(stat = "identity", aes(col = family), size = 8) +
   geom_text(color = "white", size = 3) +
