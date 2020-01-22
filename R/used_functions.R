@@ -225,10 +225,17 @@ direct_agg <- function(trait_data,
   # subset so that no NA values occur in species data
   # (otherwise all NA entries are viewed as a group &
   # aggregated as well)
-  trait_data[, lapply(.SD, median, na.rm = TRUE),
+  agg_data <- trait_data[, lapply(.SD, median, na.rm = TRUE),
     .SDcols = trait_col,
     by = family
   ]
+
+  # merge information on order back
+  agg_data[trait_data,
+    `:=`(order = i.order),
+    on = "family"
+  ]
+  agg_data
 }
 
 # TODO: Monitor subset data (how many entries in species/genus)
