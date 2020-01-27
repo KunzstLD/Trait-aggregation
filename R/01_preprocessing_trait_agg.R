@@ -4,6 +4,7 @@
 
 trait_dat <- load_data(path = "./Data/", pattern = "harmonized\\.rds")
 
+# choose traits, normalize and omit incomplete information
 preproc_dat <- trait_dat %>%
   lapply(., function(y) {
     y[, .SD,
