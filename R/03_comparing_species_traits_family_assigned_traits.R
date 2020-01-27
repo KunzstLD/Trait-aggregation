@@ -90,21 +90,10 @@ setnames(traitval_aus,
   )
 )
 
-
-# _____________________________________________________________________________
-#### Analysis
-# _____________________________________________________________________________
-
-# For Australia
-traitval_aus[, `:=`(
-  deviance_dir_fam = value_direct_agg - value_famlvl,
-  deviance_comp_fam = value_genus_fam_agg - value_famlvl
-)]
-
 # create grouping feature column
 traitval_aus[, grouping_feature := sub("(.+)(\\_)(.+)", "\\1", variable)]
 
-# restrict to certain orders
+# create subset restricted to certain orders
 traitval_aus_aqi <- traitval_aus[order %in% c(
   "Ephemeroptera",
   "Hemiptera",
@@ -116,7 +105,16 @@ traitval_aus_aqi <- traitval_aus[order %in% c(
   "Lepidoptera",
   "Megaloptera",
   "Neuroptera"
-  ),]
+  ), ]
+
+# _____________________________________________________________________________
+#### Analysis
+# _____________________________________________________________________________
+
+traitval_aus[, `:=`(
+  deviance_dir_fam = value_direct_agg - value_famlvl,
+  deviance_comp_fam = value_genus_fam_agg - value_famlvl
+)]
 
 # How many cases overall have been evaluated differently by Chessman?
 # 27 % for both aggregation methods 
@@ -132,14 +130,12 @@ traitval_aus[deviance_comp_fam != 0 & variable %in% "feed_shredder", ] %>%
   .[, .(.N), by = order] %>% 
   .[order(-N),]
 
-
 # Regarding deviating classification (trait_val compl_agg > fam_assignment)
 # and vice versa: no tendency, almost equal. Also regarding orders
 traitval_aus[deviance_comp_fam > 0, .N, by = "order"] %>%
   .[order(-N), ]
 traitval_aus[deviance_comp_fam < 0, .N, by = "order"] %>%
   .[order(-N), ]
-
 
 # Which orders?
 # Diptera
@@ -151,13 +147,13 @@ traitval_aus[deviance_comp_fam != 0, .(.N), by = c("order"), ] %>%
 # How many taxa/cases are classified differntly?
 # Overall, about 50 % of Diptera differently classified regarding
 nrow(traitval_aus[deviance_comp_fam != 0 &
-                    order %in% "Diptera",]) / nrow(traitval_aus[order %in% "Diptera",])
+  order %in% "Diptera", ]) / nrow(traitval_aus[order %in% "Diptera", ])
 # 42 % of Trichoptera differently classified
 nrow(traitval_aus[deviance_comp_fam != 0 &
-                    order %in% "Trichoptera",]) / nrow(traitval_aus[order %in% "Trichoptera",])
+  order %in% "Trichoptera", ]) / nrow(traitval_aus[order %in% "Trichoptera", ])
 # 29 % of Coleoptera differntly classified
 nrow(traitval_aus[deviance_comp_fam != 0 &
-                    order %in% "Coleoptera",]) / nrow(traitval_aus[order %in% "Coleoptera",])
+  order %in% "Coleoptera", ]) / nrow(traitval_aus[order %in% "Coleoptera", ])
 
 # freq of deviating assessments
 freq_diff <- traitval_aus_aqi[, .(
