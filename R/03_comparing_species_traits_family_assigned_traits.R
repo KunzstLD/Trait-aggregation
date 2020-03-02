@@ -68,17 +68,22 @@ setnames(chessman_raw,
 # del maximum length variable
 chessman_raw[, `Maximum length (mm)` := NULL]
 
+# rm missing entries
+chessman_raw <- na.omit(chessman_raw)
+
 # transform to lf
 chessman_raw <- melt(chessman_raw, id.vars = c("family", "order"))
+
+# correct taxnomoy: "Veneroida" to "Venerida"
+chessman_raw[order %in% "Veneroida", order := "Venerida"]
 
 # combine with results from other aggregation methods
 # see Script 02_comparing_agg_methods
 traitval_aus <- merge(
-  results_agg[["Trait_AUS_harmonized.rds"]],
+  results_agg[["Trait_AUS_harmonized"]],
   chessman_raw,
   by = c("family", "variable", "order")
 )
-
 setnames(traitval_aus,
   old = c(
     "deviance",
@@ -94,6 +99,7 @@ setnames(traitval_aus,
 traitval_aus[, grouping_feature := sub("(.+)(\\_)(.+)", "\\1", variable)]
 
 # create subset restricted to certain orders
+# No Dipterans in data 
 traitval_aus_aqi <- traitval_aus[order %in% c(
   "Ephemeroptera",
   "Hemiptera",
@@ -117,16 +123,15 @@ traitval_aus[, `:=`(
 )]
 
 # How many cases overall have been evaluated differently by Chessman?
-# 27 % for both aggregation methods 
+# 41.1 % for direct aggregation method
+# 39.2 % for complex aggr
 nrow(traitval_aus[deviance_dir_fam != 0, ]) / nrow(traitval_aus)
 nrow(traitval_aus[deviance_comp_fam != 0, ]) / nrow(traitval_aus)
 
-# Which traits?
-# feed_shredder 44 times classified differently
-# size_medium 43,....
+# Which traits mostly differently classified?
 traitval_aus[deviance_comp_fam != 0, .(.N), by = c("variable")] %>% 
   .[order(-N),]
-traitval_aus[deviance_comp_fam != 0 & variable %in% "feed_shredder", ] %>%
+traitval_aus[deviance_comp_fam != 0 & variable %in% "feed_herbivore", ] %>%
   .[, .(.N), by = order] %>% 
   .[order(-N),]
 
@@ -138,11 +143,11 @@ traitval_aus[deviance_comp_fam < 0, .N, by = "order"] %>%
   .[order(-N), ]
 
 # Which orders?
-# Diptera
-# Trichoptera
-# Coleoptera,...
-traitval_aus[deviance_comp_fam != 0, .(.N), by = c("order"), ] %>%
-  .[order(-N), ]
+# separate for grouping features
+traitval_aus[deviance_comp_fam != 0, .(.N), by = c("order", 
+                                                   "grouping_feature"), ] %>%
+  .[order(grouping_feature, -N), ]
+
 
 # How many taxa/cases are classified differntly?
 # Overall, about 50 % of Diptera differently classified regarding
