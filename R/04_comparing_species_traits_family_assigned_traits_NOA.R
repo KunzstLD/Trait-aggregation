@@ -17,7 +17,7 @@ noa_trait_matrix <-
   .[, .(Order, Family, Volt, Size, Habt, Trop, Resp)]
 
 # check traits per grouping feature
-describe(noa_trait_matrix)
+# describe(noa_trait_matrix)
 
 # rm NAs
 noa_trait_matrix <- na.omit(noa_trait_matrix)
@@ -98,9 +98,10 @@ noa_trait_matrix[, c("locom_skate", "locom_sprawl", "locom_climb", "locom_cling"
 noa_trait_matrix <- melt(noa_trait_matrix, id.vars = c("order", "family"))
 
 # merge together with values from trait aggregation
-traitval_noa <- merge(results_agg[["Traits_US_LauraT_pp_harmonized.rds"]],
-      noa_trait_matrix,
-      by = c("family", "variable", "order"))
+traitval_noa <-
+  merge(results_agg[["Traits_US_LauraT_pp_harmonized"]],
+        noa_trait_matrix,
+        by = c("family", "variable", "order"))
 
 setnames(traitval_noa,
          old = c(
@@ -114,7 +115,21 @@ setnames(traitval_noa,
 )
 
 # create grouping feature column
-traitval_noa[, grouping_feature := sub("(.+)(\\_)(.+)", "\\1", variable)]
+traitval_noa[, grouping_feature := sub("(\\w)(\\_)(.+)", "\\1", variable)]
+
+# create subset restricted to certain orders
+traitval_noa_aqi <- traitval_noa[order %in% c(
+  "Ephemeroptera",
+  "Hemiptera",
+  "Odonata",
+  "Trichoptera",
+  "Coleoptera",
+  "Plecoptera",
+  "Diptera",
+  "Lepidoptera",
+  "Megaloptera",
+  "Neuroptera"
+), ]
 
 # _______________________________________________________________________
 #### Analysis ####
@@ -127,10 +142,37 @@ traitval_noa[, `:=`(
 )]
 
 # How many cases overall have been evaluated differently by Chessman?
-# 19 % and 17 % respectively (slightly lower than for AUS)
+# 22 % and 21 % respectively 
 nrow(traitval_noa[deviance_dir_fam != 0, ]) / nrow(traitval_noa)
 nrow(traitval_noa[deviance_comp_fam != 0, ]) / nrow(traitval_noa)
 
+# Which traits?
+# size_medium 33 times,...
+traitval_noa[deviance_comp_fam != 0, .(.N), by = c("variable")] %>% 
+  .[order(-N),]
+traitval_noa[deviance_comp_fam != 0 & variable %in% "size_medium", ] %>%
+  .[, .(.N), by = order] %>% 
+  .[order(-N),]
 
+# Regarding deviating classification (trait_val compl_agg > fam_assignment)
+# and vice versa: no tendency, almost equal
+traitval_noa[deviance_comp_fam > 0, .N, by = "order"] %>%
+  .[order(-N), ]
+traitval_noa[deviance_comp_fam < 0, .N, by = "order"] %>%
+  .[order(-N), ]
 
+# Which orders?
+# Ephmeroptera, Diptera
+traitval_noa[deviance_comp_fam != 0, .(.N), by = c("order"), ] %>%
+  .[order(-N), ]
+
+# How many taxa/cases are classified differntly per order?
+nrow(traitval_noa[deviance_comp_fam != 0 &
+                    order %in% "Ephemeroptera", ]) / nrow(traitval_noa[order %in% "Ephemeroptera", ])
+nrow(traitval_noa[deviance_comp_fam != 0 &
+                    order %in% "Diptera", ]) / nrow(traitval_noa[order %in% "Diptera", ])
+nrow(traitval_noa[deviance_comp_fam != 0 &
+                    order %in% "Trichoptera", ]) / nrow(traitval_noa[order %in% "Trichoptera", ])
+nrow(traitval_noa[deviance_comp_fam != 0 &
+                    order %in% "Coleoptera", ]) / nrow(traitval_noa[order %in% "Coleoptera", ])
 
