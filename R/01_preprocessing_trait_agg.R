@@ -22,7 +22,8 @@ preproc_dat <- trait_dat %>%
         "genus",
         "family",
         "order"
-      )]))
+      )])) %>% 
+      .[!is.na(family), ]
   })
 
 # improve names

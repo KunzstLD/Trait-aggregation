@@ -95,6 +95,9 @@ setnames(traitval_aus,
   )
 )
 
+# 
+traitval_aus$order %>% table()
+
 # create grouping feature column
 traitval_aus[, grouping_feature := sub("(.+)(\\_)(.+)", "\\1", variable)]
 
@@ -123,8 +126,8 @@ traitval_aus[, `:=`(
 )]
 
 # How many cases overall have been evaluated differently by Chessman?
-# 41.1 % for direct aggregation method
-# 39.2 % for complex aggr
+# 40.4 % for direct aggregation method
+# 39.8 % for complex aggr
 nrow(traitval_aus[deviance_dir_fam != 0, ]) / nrow(traitval_aus)
 nrow(traitval_aus[deviance_comp_fam != 0, ]) / nrow(traitval_aus)
 
@@ -150,29 +153,29 @@ traitval_aus[deviance_comp_fam != 0, .(.N), by = c("order",
 
 
 # How many taxa/cases are classified differntly?
-# Overall, about 50 % of Diptera differently classified regarding
 nrow(traitval_aus[deviance_comp_fam != 0 &
   order %in% "Diptera", ]) / nrow(traitval_aus[order %in% "Diptera", ])
-# 42 % of Trichoptera differently classified
 nrow(traitval_aus[deviance_comp_fam != 0 &
   order %in% "Trichoptera", ]) / nrow(traitval_aus[order %in% "Trichoptera", ])
-# 29 % of Coleoptera differntly classified
 nrow(traitval_aus[deviance_comp_fam != 0 &
   order %in% "Coleoptera", ]) / nrow(traitval_aus[order %in% "Coleoptera", ])
 
 # freq of deviating assessments
-freq_diff <- traitval_aus_aqi[, .(
-  n_complete = .N, family, variable,
-  order, grouping_feature, deviance_comp_fam
-), by = "order"] %>%
-  .[deviance_comp_fam != 0, .(
-    n_deviating = .N,
-    n_complete, family, variable, order,
-    deviance_comp_fam
-  ), by = c("order","grouping_feature")] %>% 
-  .[, .(freq = (n_deviating/n_complete)*100, 
-        order, 
-        grouping_feature)] 
+freq_diff <- traitval_aus[, .(n_complete = .N,
+                              family,
+                              variable,
+                              order,
+                              grouping_feature,
+                              deviance_dir_fam), by = "order"] %>%
+  .[deviance_dir_fam != 0, .(n_deviating = .N,
+                              n_complete,
+                              family,
+                              variable,
+                              order,
+                              deviance_dir_fam), by = c("order", "grouping_feature")] %>%
+  .[, .(freq = (n_deviating / n_complete) * 100,
+        order,
+        grouping_feature)]
 
 # re both traits: feeding mode 
 # Odonata trait assignments do not deviate from trait aggregation values
@@ -180,7 +183,7 @@ p_freq_feed <- freq_diff[grouping_feature %in% "feed", ] %>%
   .[!duplicated(order),] %>% 
   ggplot(.) +
   geom_bar(aes(x = as.factor(order), y = freq), stat = 'identity',
-           width = 0.35, fill = "steelblue")+
+           width = 0.35, fill = "darkblue")+
   coord_flip()+
   labs(#title = "Frequency of differntly classified cases for the grouping feature feeding mode",
        #x = "Order",
@@ -200,11 +203,12 @@ p_freq_size <- freq_diff[grouping_feature %in% "size", ] %>%
   .[!duplicated(order),] %>% 
   ggplot(.) +
   geom_bar(aes(x = as.factor(order), y = freq), stat = 'identity',
-           width = 0.35, fill = "steelblue")+
+           width = 0.35, fill = "darkblue")+
   coord_flip()+
   labs(#title = "Frequency of differntly classified cases for the grouping feature feeding mode",
        #x = "Order",
-       y = "Frequency in [%]")+
+       y = "Cases with deviating trait values between direct aggreation 
+       and trait values assigned at family level [%]")+
   theme_light(base_size = 15, base_family = "Poppins") +
   theme(
     legend.position = "none",
@@ -221,8 +225,8 @@ p_freq_size <- freq_diff[grouping_feature %in% "size", ] %>%
 set.seed(123)
 
 # feeding mode:
-p_sum_feed <- ggplot(traitval_aus_aqi[grouping_feature %in% "feed",],
-       aes(x = as.factor(order), y = deviance_comp_fam)) +
+p_sum_feed <- ggplot(traitval_aus[grouping_feature %in% "feed",],
+       aes(x = as.factor(order), y = deviance_dir_fam)) +
   geom_jitter(size = 6,
               alpha = 0.35,
               width = 0.15,
@@ -232,7 +236,7 @@ p_sum_feed <- ggplot(traitval_aus_aqi[grouping_feature %in% "feed",],
   scale_color_d3()+
   coord_flip() +
   labs(x = "Order",
-       y = "Deviance complex aggregation \n and assignments on family level")+
+       y = "Deviance direct aggregation \n and assignments on family level")+
   facet_wrap( ~ variable) +
   theme_light(base_size = 15, base_family = "Poppins") +
   theme(
@@ -242,11 +246,11 @@ p_sum_feed <- ggplot(traitval_aus_aqi[grouping_feature %in% "feed",],
     axis.text.y = element_text(family = "Roboto Mono", size = 11)
     #    panel.grid = element_blank()
   )
-ggdraw(p_sum_feed) + draw_plot(p_freq_feed, x = 0.58, y = -0.25, width = 0.52, height = 1,
+ggdraw(p_sum_feed) + draw_plot(p_freq_feed, x = 0.58, y = -0.24, width = 0.52, height = 1,
                             scale = 0.5)
 
 # size:
-p_sum_size <- ggplot(traitval_aus_aqi[grouping_feature %in% "size",],
+p_sum_size <- ggplot(traitval_aus[grouping_feature %in% "size",],
        aes(x = as.factor(order), y = deviance_comp_fam)) +
   geom_jitter(size = 6,
               alpha = 0.35,
@@ -256,7 +260,7 @@ p_sum_size <- ggplot(traitval_aus_aqi[grouping_feature %in% "size",],
   scale_y_continuous(limits = c(-1.1, 1.1), expand = c(0.005, 0.005)) +
   coord_flip() +
   labs(x = "Order",
-       y = "Deviance complex aggregation \n and assignments on family level")+
+       y = "Deviance direct aggregation \n and assignments on family level")+
   facet_wrap( ~ variable, nrow = 2) +
   theme_light(base_size = 15, base_family = "Poppins") +
   theme(

@@ -87,7 +87,7 @@ normalize_by_rowSum <- function(x, non_trait_cols) {
     # divide values for each trait state by
     # the sum of trait state values
     x[, (col_name) := lapply(.SD, function(y) {
-      round(y / rowSum, digits = 2)
+      y / rowSum
     }),
     .SDcols = names(x) %like% cols
     ]
@@ -144,41 +144,54 @@ Mode <- function(x, na.rm = FALSE) {
   ux[which.max(tabulate(match(x, ux)))]
 }
 
-# Geometric mean
-geom_mean <- function(x, na.rm = TRUE) {
-  if(na.rm)
-    x <- x[!is.na(x)]
-  prod(x) ^ (1 / length(x))
-}
-
-# 
-agg_fun <- function(y, na.rm = TRUE) {
-  y <- y[y != 0]
-  # if just zeros
-  if(identical(y, numeric(0)))
-    0
-  # if just NA return NA
-  # else (is.na(y))
+# aggregation function used 
+# in spec_genus_agg
+agg_fun <- function(y, na.rm = FALSE) {
   # just one value return that value
-  else if (length(y) == 1)
+  if (length(y) == 1)
     y
   # mode for cases with duplicates for one value, like:
   # c(1,1,1,3,0)
   else if (length(names(table(y)[table(y) > 1])) == 1)
     Mode(y, na.rm = na.rm)
-  # median for cases with multiple duplicates
+  # median for cases with multiple duplicates of the same length
   else if (length(names(table(y)[table(y) > 1])) > 1 &
-           length(names(table(y)[table(y) == 1]))  == 0)
+           length(names(table(y)[table(y) == 1])) == 0)
     median(y, na.rm = na.rm)
-  # geometric mean for cases with multiple duplicates and
-  # distinct values, like:
+  # mean for cases with multiple duplicates
+  # and distinct values, like
   # c(1,1,2,2,3)
   else if (length(names(table(y)[table(y) > 1])) > 1 &
-           length(names(table(y)[table(y) == 1]))  > 0)
-    geom_mean(y, na.rm = na.rm)
-  # geometric mean for distinct values
+           length(names(table(y)[table(y) == 1])) > 0)
+    mean(y, na.rm = na.rm)
+  # for distinct values 
   else if (length(y) == length(unique(y)))
-    geom_mean(y, na.rm = na.rm)
+    mean(y, na.rm = na.rm)
+}
+
+# slightly altered in comparison to agg_fun
+# uses median instead of mean
+agg_fun_median <- function(y, na.rm = FALSE) {
+  # just one value return that value
+  if (length(y) == 1)
+    y
+  # mode for cases with duplicates for one value, like:
+  # c(1,1,1,3,0)
+  else if (length(names(table(y)[table(y) > 1])) == 1)
+    Mode(y, na.rm = na.rm)
+  # median for cases with multiple duplicates of the same length
+  else if (length(names(table(y)[table(y) > 1])) > 1 &
+           length(names(table(y)[table(y) == 1])) == 0)
+    median(y, na.rm = na.rm)
+  # median for cases with multiple duplicates
+  # and distinct values, like
+  # c(1,1,2,2,3)
+  else if (length(names(table(y)[table(y) > 1])) > 1 &
+           length(names(table(y)[table(y) == 1])) > 0)
+    median(y, na.rm = na.rm)
+  # median for distinct values 
+  else if (length(y) == length(unique(y)))
+    median(y, na.rm = na.rm)
 }
 
 # Aggregation to family level by allocating species entries
@@ -237,67 +250,17 @@ spec_genus_agg <- function(data,
            `:=`(order = i.order),
            on = "family"]
   
-  # bind data on family-level
-  if (nrow(data[is.na(species) & is.na(genus), ]) == 0)
-    agg_data <- agg_data
-  else
-    agg_data <-
-    rbind(agg_data, data[is.na(species) & is.na(genus), ]  %>%
-            .[!family %in% agg_data$family, -c("species", "genus")] %>%
-            .[!duplicated(family), ])
+  # # bind data on family-level
+  # if (nrow(data[is.na(species) & is.na(genus), ]) == 0)
+  #   agg_data <- agg_data
+  # else
+  #   agg_data <-
+  #   rbind(agg_data, data[is.na(species) & is.na(genus), ]  %>%
+  #           .[!family %in% agg_data$family, -c("species", "genus")] %>%
+  #           .[!duplicated(family), ])
 }
 
-spec_genus_agg_2 <- function(data,
-                           non_trait_cols) {
-  # get names of trait columns
-  pat <- paste0(non_trait_cols, collapse = "|")
-  trait_col <- grep(pat, names(data), value = TRUE, invert = TRUE)
-  
-  # aggregate to genus level via median
-  # subset so that no NA values occur in species data
-  # (otherwise all NA entries are viewed as a group &
-  # aggregated as well)
-  trait_data_genus <- data[!is.na(species),
-                           lapply(.SD, median, na.rm = TRUE),
-                           .SDcols = trait_col,
-                           by = genus]
-  
-  # merge family information back
-  trait_data_genus[data[!is.na(species),],
-                   `:=`(family = i.family,
-                        order = i.order),
-                   on = "genus"]
-  
-  # bind with data resolved on genus level or family level
-  # TODO: Change to is.na(genus) and add taxa res. on family-level afterwards
-  trait_data_genus <-
-    rbind(trait_data_genus,
-          data[is.na(species) & !is.na(genus), ] %>%
-            .[!genus %in% trait_data_genus$genus, ],
-          fill = TRUE)
-  
-  # # aggregate to family level
-  agg_data <- trait_data_genus[, c(lapply(.SD, agg_fun)),
-  .SDcols = trait_col,
-  by = "family"]
-  
-  # merge information on order back
-  agg_data[data,
-           `:=`(order = i.order),
-           on = "family"]
-  
-  # bind data on family-level
-  if (nrow(data[is.na(species) & is.na(genus), ]) == 0)
-    agg_data <- agg_data
-  else
-    agg_data <-
-    rbind(agg_data, data[is.na(species) & is.na(genus), ]  %>%
-            .[!family %in% agg_data$family, -c("species", "genus")] %>%
-            .[!duplicated(family), ])
-}
-
-
-# 
+# spec_genus aggegation using improved agg_function
 spec_genus_agg_alt <- function(data,
                            non_trait_cols) {
   # get names of trait columns
@@ -320,26 +283,14 @@ spec_genus_agg_alt <- function(data,
                         order = i.order),
                    on = "genus"]
   
-  # bind with data resolved on on family level
+  # bind with data resolved on family level
   trait_data_genus <-
     rbind(trait_data_genus,
           data[is.na(species) & is.na(genus) & !is.na(family), ],
           fill = TRUE)
   
-  ## aggregate to family level
-  agg_data <- trait_data_genus[, c(lapply(.SD, function(y) {
-    # for cases like c(0,1), c(0,0,1,1) and c(0,1,0.5)
-    if (length(unique(y)) == length(y) |
-        sum(duplicated(y)) == sum(!duplicated(y))) {
-      median(y, na.rm = TRUE)
-      # e.g. in case (0,0,3)
-      # } else if (Mode(y, na.rm = TRUE) == 0 & !all((y) == 0)) {
-      #   Mode(y[y != 0], na.rm = TRUE)
-    }
-    else {
-      Mode(y, na.rm = TRUE)
-    }
-  })),
+  # aggregate to family level
+  agg_data <- trait_data_genus[, c(lapply(.SD, agg_fun_median)),
   .SDcols = trait_col,
   by = "family"]
   
@@ -348,17 +299,15 @@ spec_genus_agg_alt <- function(data,
            `:=`(order = i.order),
            on = "family"]
   
-  # bind data on family-level
-  if (nrow(data[is.na(species) & is.na(genus), ]) == 0)
-    agg_data <- agg_data
-  else
-    agg_data <-
-    rbind(agg_data, data[is.na(species) & is.na(genus), ]  %>%
-            .[!family %in% agg_data$family, -c("species", "genus")] %>%
-            .[!duplicated(family), ])
+  # bind data on family-level -> necessary?
+  # if (nrow(data[is.na(species) & is.na(genus), ]) == 0)
+  #   agg_data <- agg_data
+  # else
+  #   agg_data <-
+  #   rbind(agg_data, data[is.na(species) & is.na(genus), ]  %>%
+  #           .[!family %in% agg_data$family, -c("species", "genus")] %>%
+  #           .[!duplicated(family), ])
 }
-
-
 
 # direct aggregation to family level
 direct_agg <- function(trait_data,
@@ -384,6 +333,60 @@ direct_agg <- function(trait_data,
   agg_data
 }
 
+# weighted aggregation
+# compute ratio:
+# genera initially in DB/ genera after selecting only complete profiles
+# (includes entries on genera and species-level)
+# weights are standardized so that they sum up to 1 by dividing each 
+# weight by the sum of all weights within their respective family 
+compute_weights <- function(init, preproc) {
+  # Calc occurrences per genus init
+  init <- init[!is.na(genus), .N, by = "genus"]
+  
+  # Calc occurrences per genus preproc
+  preproc <- preproc[!is.na(genus), .(family,
+                                      order,
+                                      .N),
+                     by = "genus"]
+  # merge and calc standardized weights 
+  weighting <- merge(preproc, 
+                     init, 
+                     by = "genus",
+                     suffixes = c("_preproc", "_init"))
+  weighting <- weighting[!duplicated(genus),]
+  weighting[, coeff := N_preproc/N_init]
+  weighting[, stand_coeff := coeff/sum(coeff), 
+            by = "family"]
+}
+
+# weighted aggregation function
+# trait values on species and genus-level,
+# are multipled by weights and then summed up 
+# per family
+weighted_agg <- function(data, non_trait_cols, weights) {
+  # get names of trait columns
+  pat <- paste0(non_trait_cols, collapse = "|")
+  trait_col <- grep(pat, names(data), value = TRUE, invert = TRUE)
+  
+  # merge weights
+  data[weights,
+       `:=`(stand_coeff = i.stand_coeff),
+       on = "genus"]
+  
+  data[!is.na(genus), (trait_col) := lapply(.SD, function(y)
+    y * stand_coeff),
+    .SDcols = trait_col,
+    by = "genus"]
+  data <- data[!duplicated(genus), ]
+  
+  output <- data[, lapply(.SD, sum),
+                 .SDcols = trait_col,
+                 by = "family"]
+  # merge order back
+  output[data,
+         `:=`(order = i.order),
+         on = "family"]
+}
+
 # TODO: Monitor subset data (how many entries in species/genus)
-# TODO: Weigthing?
 # Aggregation for EU data (includes complementation from tachet)

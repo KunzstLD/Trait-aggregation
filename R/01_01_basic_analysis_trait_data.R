@@ -181,7 +181,6 @@ lapply(cov_init, function(y) {
                            aq_ins = round(sum(N) / total_sum, digits = 2))]
 })
 
-
 # orders not included
 # NZ:
 order_vec <- unique(cov_preproc$Trait_NZ_pp_harmonized$order)
@@ -190,7 +189,6 @@ cov_init$Trait_NZ_pp_harmonized.rds[!order %in% order_vec, ]
 # AUS:
 order_vec <- unique(cov_preproc$Trait_AUS_harmonized$order)
 cov_init$Trait_AUS_harmonized.rds[!order %in% order_vec, unique(order)]
-
 
 
 # families not covered in preproc. dataset?
@@ -248,9 +246,14 @@ setnames(
 )
 
 # latex output
+# for now, exclude NOA_fc 
 print(
   xtable(
-    output_tbl,
+    output_tbl[, .(Order, 
+                   Australia,
+                   `New Zealand`,
+                   Europe,
+                   `North America`)],
     caption = "Proportion of families per order that remain
     after only complete trait profiles have been selected from the total
     number of all families in the databases.",

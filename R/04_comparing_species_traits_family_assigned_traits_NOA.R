@@ -22,8 +22,9 @@ noa_trait_matrix <-
 # rm NAs
 noa_trait_matrix <- na.omit(noa_trait_matrix)
 
-# convert categories to presence-absence of trait 
-noa_trait_matrix_lf <- melt(noa_trait_matrix, id.vars = c("Family", "Order"))
+# convert categories to presence-absence of trait
+noa_trait_matrix_lf <-
+  melt(noa_trait_matrix, id.vars = c("Family", "Order"))
 noa_trait_matrix <- dcast(
   noa_trait_matrix_lf,
   Order + Family ~ value,
@@ -93,43 +94,35 @@ noa_trait_matrix[, locom_crawl := apply(.SD, 1, max),
 # rm unnecessary cols
 noa_trait_matrix[, c("locom_skate", "locom_sprawl", "locom_climb", "locom_cling") := NULL]
 
-# convert back to lf 
+# convert back to lf
 # NOA data just contain aquatic insects
-noa_trait_matrix <- melt(noa_trait_matrix, id.vars = c("order", "family"))
+noa_trait_matrix <-
+  melt(noa_trait_matrix, id.vars = c("order", "family"))
 
-# merge together with values from trait aggregation
+#### Check:
+# distinctive families
+noa_trait_matrix$family %>% Hmisc::describe()
+
+# Overlap between noa_trait_matrix and aggregated results
+unique(noa_trait_matrix$family) %in% unique(results_agg[["Traits_US_LauraT_pp_harmonized"]]$family) %>%
+  sum()
+
+#### Merge with values from trait aggregation
 traitval_noa <-
   merge(results_agg[["Traits_US_LauraT_pp_harmonized"]],
         noa_trait_matrix,
         by = c("family", "variable", "order"))
 
-setnames(traitval_noa,
-         old = c(
-           "deviance",
-           "value"
-         ),
-         new = c(
-           "deviance_complex_direct_agg",
-           "value_famlvl"
-         )
+setnames(
+  traitval_noa,
+  old = c("deviance",
+          "value"),
+  new = c("deviance_complex_direct_agg",
+          "value_famlvl")
 )
 
 # create grouping feature column
 traitval_noa[, grouping_feature := sub("(\\w)(\\_)(.+)", "\\1", variable)]
-
-# create subset restricted to certain orders
-traitval_noa_aqi <- traitval_noa[order %in% c(
-  "Ephemeroptera",
-  "Hemiptera",
-  "Odonata",
-  "Trichoptera",
-  "Coleoptera",
-  "Plecoptera",
-  "Diptera",
-  "Lepidoptera",
-  "Megaloptera",
-  "Neuroptera"
-), ]
 
 # _______________________________________________________________________
 #### Analysis ####
@@ -141,38 +134,174 @@ traitval_noa[, `:=`(
   deviance_comp_fam = value_genus_fam_agg - value_famlvl
 )]
 
-# How many cases overall have been evaluated differently by Chessman?
-# 22 % and 21 % respectively 
-nrow(traitval_noa[deviance_dir_fam != 0, ]) / nrow(traitval_noa)
-nrow(traitval_noa[deviance_comp_fam != 0, ]) / nrow(traitval_noa)
+#### How many cases overall have been evaluated differently by Pyne?
+# 22 % and 21 % respectively
+traitval_noa[deviance_dir_fam != 0, .N] / traitval_noa[, .N]
+traitval_noa[deviance_comp_fam != 0, .N] / traitval_noa[, .N]
 
 # Which traits?
-# size_medium 33 times,...
-traitval_noa[deviance_comp_fam != 0, .(.N), by = c("variable")] %>% 
-  .[order(-N),]
-traitval_noa[deviance_comp_fam != 0 & variable %in% "size_medium", ] %>%
-  .[, .(.N), by = order] %>% 
-  .[order(-N),]
+total <- traitval_noa[, .N, by = "variable"] %>% .[, N]
+traitval_noa[deviance_dir_fam != 0, .(.N),
+             by = c("variable")] %>%
+  .[order(-N), N / total]
+
+# Latex output:
+# direct_fam
+traitval_noa[deviance_dir_fam != 0, .(.N),
+             by = c("variable")] %>%
+  .[order(-N), .(
+    Trait = variable,
+    `Families differently evaluated [%]` =
+      round(N / total * 100, digits = 2)
+  )] %>%
+  xtable_wo_rownames(
+    .,
+    caption = "Percentage of families differently evaluated by
+    direct aggreation and Pyne et al.
+    for all traits were deviating evaluations
+    occurred.",
+    label = "tab:SI_perc_dir_agg_expert_NOA"
+  )
+
+# comp_fam
+traitval_noa[deviance_comp_fam != 0, .(.N),
+             by = c("variable")] %>%
+  .[order(-N), .(
+    Trait = variable,
+    `Families differently evaluated [%]` =
+      round(N / total * 100, digits = 2)
+  )] %>%
+  xtable_wo_rownames(
+    .,
+    caption = "Percentage of families differently evaluated by
+    stepwise aggreation and Pyne et al. for all traits were deviating evaluations
+    occurred.",
+    label = "tab:SI_perc_stepwise_agg_expert_NOA"
+  )
+
+#### Which orders?
+# Ephmeroptera, Diptera
+total <- traitval_noa[, .N, by = c("order")] %>% .[order(-N),]
+
+# latex output
+traitval_noa[deviance_dir_fam != 0, .(variable, .N), by = "order"] %>%
+  merge(x = . , y = total, by = "order") %>%
+  .[, .(
+    Order = order,
+    `Families differently evaluated direct_agg [%]` = round((N.x / N.y) * 100, digits = 2)
+  )] %>%
+  .[!duplicated(Order), ] %>%
+  .[order(-`Families differently evaluated direct_agg [%]`), ] %>%
+  xtable_wo_rownames(.,
+                     caption = "Percentage of families differently evaluated
+                     by  and Pyne et al. for all compared orders",
+                     label = "tab:SI_perc_dir_agg_expert_family_NOA")
+
+# stepwise agg latex output
+traitval_noa[deviance_comp_fam != 0, .(variable, .N), by = "order"] %>%
+  merge(x = . , y = total, by = "order") %>%
+  .[, .(
+    Order = order,
+    `Families differently evaluated stepwise_agg [%]` = round((N.x /
+                                                                 N.y) * 100, digits = 2)
+  )] %>%
+  .[!duplicated(Order),] %>%
+  .[order(-`Families differently evaluated stepwise_agg [%]`),] %>%
+  xtable_wo_rownames(.,
+                     caption = "Percentage of families differently evaluated
+                     by  and Pyne et al. for all compared orders",
+                     label = "tab:SI_perc_stepwise_agg_expert_family_NOA")
+
+# SD in deviance dir_fam
+traitval_noa[, sd_dir_fam := sd(deviance_dir_fam), by = c("order", "variable")]
+traitval_noa[order(-sd_dir_fam), .(family,
+                                   order,
+                                   variable,
+                                   sd_dir_fam,
+                                   value_direct_agg,
+                                   value_famlvl)] %>% View()
 
 # Regarding deviating classification (trait_val compl_agg > fam_assignment)
 # and vice versa: no tendency, almost equal
-traitval_noa[deviance_comp_fam > 0, .N, by = "order"] %>%
-  .[order(-N), ]
+traitval_noa[deviance_comp_fam > 0, .(.N, variable), by = "order"] %>%
+  .[order(-N),]
 traitval_noa[deviance_comp_fam < 0, .N, by = "order"] %>%
-  .[order(-N), ]
+  .[order(-N),]
 
-# Which orders?
-# Ephmeroptera, Diptera
-traitval_noa[deviance_comp_fam != 0, .(.N), by = c("order"), ] %>%
-  .[order(-N), ]
+#### How big are the deviances actually?
+# direct aggreation with at family-level assigned traits
+total <- traitval_noa[deviance_dir_fam != 0, .N]
+
+# dev 0.25
+traitval_noa[deviance_dir_fam != 0, .(family,
+                                      order,
+                                      variable,
+                                      value_direct_agg,
+                                      value_famlvl,
+                                      deviance_dir_fam)] %>%
+  .[abs(deviance_dir_fam) <= 0.25,]
+
+
+# dev. 0.5
+traitval_noa[deviance_dir_fam != 0, .(family,
+                                      order,
+                                      variable,
+                                      value_direct_agg,
+                                      value_famlvl,
+                                      deviance_dir_fam)] %>%
+  .[abs(deviance_dir_fam) %between% c(0.26, 0.5), .N / total]
+traitval_noa[deviance_dir_fam != 0, .(family,
+                                      order,
+                                      variable,
+                                      value_direct_agg,
+                                      value_famlvl,
+                                      deviance_dir_fam)] %>%
+  .[abs(deviance_dir_fam) %between% c(0.26, 0.5),]
+
+
+# dev 0.75
+traitval_noa[deviance_dir_fam != 0, .(family,
+                                      order,
+                                      variable,
+                                      value_direct_agg,
+                                      value_famlvl,
+                                      deviance_dir_fam)] %>%
+  .[abs(deviance_dir_fam) == 0.75,]
+
+# dev 1
+traitval_noa[deviance_dir_fam != 0, .(
+  family,
+  order,
+  variable,
+  grouping_feature,
+  value_direct_agg,
+  value_famlvl,
+  deviance_dir_fam
+)] %>%
+  .[abs(deviance_dir_fam) == 1,] %>%
+  Hmisc::describe()
+
+# stepwise aggregation with at family-level assigned traits
+total_comp_agg <- traitval_noa[deviance_comp_fam != 0, .N]
+
+traitval_noa[deviance_comp_fam != 0, .(
+  family,
+  order,
+  variable,
+  grouping_feature,
+  value_direct_agg,
+  value_famlvl,
+  deviance_comp_fam
+)] %>%
+  .[abs(deviance_comp_fam) == 1,] %>%
+  Hmisc::describe()
 
 # How many taxa/cases are classified differntly per order?
 nrow(traitval_noa[deviance_comp_fam != 0 &
-                    order %in% "Ephemeroptera", ]) / nrow(traitval_noa[order %in% "Ephemeroptera", ])
+                    order %in% "Ephemeroptera",]) / nrow(traitval_noa[order %in% "Ephemeroptera",])
 nrow(traitval_noa[deviance_comp_fam != 0 &
-                    order %in% "Diptera", ]) / nrow(traitval_noa[order %in% "Diptera", ])
+                    order %in% "Diptera",]) / nrow(traitval_noa[order %in% "Diptera",])
 nrow(traitval_noa[deviance_comp_fam != 0 &
-                    order %in% "Trichoptera", ]) / nrow(traitval_noa[order %in% "Trichoptera", ])
+                    order %in% "Trichoptera",]) / nrow(traitval_noa[order %in% "Trichoptera",])
 nrow(traitval_noa[deviance_comp_fam != 0 &
-                    order %in% "Coleoptera", ]) / nrow(traitval_noa[order %in% "Coleoptera", ])
-
+                    order %in% "Coleoptera",]) / nrow(traitval_noa[order %in% "Coleoptera",])

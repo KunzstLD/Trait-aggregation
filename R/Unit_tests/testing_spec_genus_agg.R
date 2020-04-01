@@ -1,5 +1,10 @@
+#_________________________________________________________________________________________
 # Testing "aggregation to family - level" part of the
-# "spec_genus_agg" function
+# old "spec_genus_agg" function
+# function problematic for cases with multiple duplicates and 
+# distinct values
+# Now, agg_fun is used instead
+#_________________________________________________________________________________________
 fun <- function(x) {
     # for cases like c(0,1), c(0,0,1,1) and c(0,1,0.5)
     if (length(unique(x)) == length(x) |
@@ -11,7 +16,7 @@ fun <- function(x) {
 }
 
 test_that(
-    "test aggregating several vectors by mode if duplicates exist, otherwise maximum",
+    "test aggregating several vectors by mode if duplicates exist, otherwise median",
     {
         expect_equal(fun(x = 0), 0)
         expect_equal(fun(x = 1), 1)
@@ -22,6 +27,7 @@ test_that(
         expect_equal(fun(x = c(1, 1, 1)), 1)
         expect_equal(fun(x = c(0.5, 0.5, 1, 1)), 0.75)
         expect_equal(fun(x = c(0, 0, 0, 0.5, 1)), 0)
+        expect_equal(fun(x = c(0,0,1,1,2)), 0)
     }
 )
 
