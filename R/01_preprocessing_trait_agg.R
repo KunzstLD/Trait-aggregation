@@ -30,3 +30,4 @@ preproc_dat <- trait_dat %>%
 names(preproc_dat) <- sub("(.+)(\\.rds)", "\\1", names(preproc_dat))
 
 #hi Snucks
+#Schnucks, ich bau ein Haus in Panama.
