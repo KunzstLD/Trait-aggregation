@@ -47,6 +47,12 @@ query_google <- function(x) {
     invisible()
 }
 
+# Capitalize the first letter #
+simple_cap <- function(x) {
+  s <- tolower(x)
+  paste0(toupper(substring(s, 1, 1)), substring(s, 2))
+}
+
 # ___________________________________________________________________________________
 #### create individual pattern of trait name (not category!) ####
 # i.e. feed_herbivore, feed_shredder -> feed
@@ -95,7 +101,7 @@ normalize_by_rowSum <- function(x, non_trait_cols) {
 
   # del rowSum column
   x[, rowSum := NULL]
-  return(x)
+  x
 }
 
 # _________________________________________________________________
@@ -130,6 +136,23 @@ completeness_trait_data <- function(x, non_trait_cols) {
   return(output)
 }
 
+# _______________________________________________________________________
+#### Return nr of taxa on taxonomic levels species, genus and family ####
+# _______________________________________________________________________
+taxonomic_lvl <- function(data) {
+  if(!is.data.table(data))
+    setDT(data)
+  spec <- data[!is.na(species), .N]
+  gen <- data[is.na(species) & !is.na(genus), .N]
+  fam <-
+    data[is.na(species) & is.na(genus) & !is.na(family), .N]
+  
+  output <- data.table(species = spec, 
+                       genus = gen, 
+                       family = fam)
+  return(output)
+}
+
 # ___________________________________________________________________
 #### Trait Aggregation ####
 # ___________________________________________________________________
@@ -146,7 +169,7 @@ Mode <- function(x, na.rm = FALSE) {
 
 # aggregation function used 
 # in spec_genus_agg
-agg_fun <- function(y, na.rm = FALSE) {
+agg_fun_mean <- function(y, na.rm = FALSE) {
   # just one value return that value
   if (length(y) == 1)
     y
@@ -157,7 +180,7 @@ agg_fun <- function(y, na.rm = FALSE) {
   # median for cases with multiple duplicates of the same length
   else if (length(names(table(y)[table(y) > 1])) > 1 &
            length(names(table(y)[table(y) == 1])) == 0)
-    median(y, na.rm = na.rm)
+    mean(y, na.rm = na.rm)
   # mean for cases with multiple duplicates
   # and distinct values, like
   # c(1,1,2,2,3)
@@ -262,7 +285,8 @@ spec_genus_agg <- function(data,
 
 # spec_genus aggegation using improved agg_function
 spec_genus_agg_alt <- function(data,
-                           non_trait_cols) {
+                           non_trait_cols, 
+                           method) {
   # get names of trait columns
   pat <- paste0(non_trait_cols, collapse = "|")
   trait_col <- grep(pat, names(data), value = TRUE, invert = TRUE)
@@ -290,7 +314,7 @@ spec_genus_agg_alt <- function(data,
           fill = TRUE)
   
   # aggregate to family level
-  agg_data <- trait_data_genus[, c(lapply(.SD, agg_fun_median)),
+  agg_data <- trait_data_genus[, c(lapply(.SD, method)),
   .SDcols = trait_col,
   by = "family"]
   
@@ -298,20 +322,13 @@ spec_genus_agg_alt <- function(data,
   agg_data[data,
            `:=`(order = i.order),
            on = "family"]
-  
-  # bind data on family-level -> necessary?
-  # if (nrow(data[is.na(species) & is.na(genus), ]) == 0)
-  #   agg_data <- agg_data
-  # else
-  #   agg_data <-
-  #   rbind(agg_data, data[is.na(species) & is.na(genus), ]  %>%
-  #           .[!family %in% agg_data$family, -c("species", "genus")] %>%
-  #           .[!duplicated(family), ])
 }
 
 # direct aggregation to family level
 direct_agg <- function(trait_data,
-                       non_trait_cols) {
+                       non_trait_cols, 
+                       method,
+                       na.rm = TRUE) {
   # get names of trait columns
   pat <- paste0(non_trait_cols, collapse = "|")
   trait_col <- grep(pat, names(trait_data), value = TRUE, invert = TRUE)
@@ -320,7 +337,7 @@ direct_agg <- function(trait_data,
   # subset so that no NA values occur in species data
   # (otherwise all NA entries are viewed as a group &
   # aggregated as well)
-  agg_data <- trait_data[, lapply(.SD, median, na.rm = TRUE),
+  agg_data <- trait_data[, lapply(.SD, method, na.rm = na.rm),
     .SDcols = trait_col,
     by = family
   ]
