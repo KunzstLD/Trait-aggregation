@@ -24,7 +24,7 @@ trait_ext_lookup <- rbind(trait_edi_lookup, data.table(
     "herbivore piercer/shredder & scraper (grazer)",
     "collector gatherer (gatherers, detritivores)",
     "predator (engulfers & pierce prey tissues)",
-    "shredder (chewers, miners, xylophagus, decomposing plants)",
+    "shredder \n (chewers, \n miners, xylophagus, \n decomposing plants)",
     "collector filterer (active filterers, passive filterers, absorbers)",
     "parasite",
     "swimmer, scater (active & passive)",
@@ -37,12 +37,12 @@ trait_ext_lookup <- rbind(trait_edi_lookup, data.table(
     "semivoltine",
     "univoltine",
     "bi- or multivoltine",
-    "Reproduction via aquatic eggs",
-    "Reproduction via terrestric eggs",
-    "Reproduction via ovoviparity",
-    "size_small: size < 9 mm (EU: size < 10 mm)",
-    "size_medium: 9 mm < size > 16 mm (EU: 10 mm < size > 20 mm)",
-    "size_large: size > 16 mm (EU: size > 20 mm)"
+    "terrestric eggs",
+    "aquatic eggs",
+    "ovoviviparity",
+    "size_small: size < 10 mm",
+    "size_medium: 10 mm <= size > 20 mm",
+    "size_large: EU: size >= 20 mm"
   ),
   ID_trait = c(
     "feed_herbivore",
@@ -70,12 +70,12 @@ trait_ext_lookup <- rbind(trait_edi_lookup, data.table(
   ),
   ID_trait_name = rep(
     c(
-      "Feeding Mode harmonized",
-      "Locomotion harmonized",
-      "Respiration harmonized",
-      "Voltinism harmonized",
-      "Reproduction/Oviposition harmonized",
-      "Body Size harmonized"
+      "Feeding Mode harm.",
+      "Locomotion harm.",
+      "Respiration harm.",
+      "Voltinism harm.",
+      "Reproduction harm.",
+      "Body Size harm."
     ),
     c(6, 4, 3, 3, 3, 3)
   )
@@ -133,14 +133,93 @@ setcolorder(
 # ____________________________________________________________________________________________
 #### Preparation for re-analysis ####
 
+# TODO: Check why these taxa on genus level do not end up in final list!
+# "Serratella" is Ephemerella (rename to old name back)
+trait_eu_subset[is.na(species) & grepl("Ephemerella", genus), `:=`(genus = "Serratella",
+                                                                   taxa = "Serratella")]
+
+# Chaetopterygini is Stenophylacini -> rename back
+trait_eu_subset[genus %in% "Stenophylacini", `:=`(genus = "Chaetopterygini",
+                                                  taxa = "Chaetopterygini")]
+
+# ORTHOCLADIINAE/DIAMESINAE is also PRODIAMESINAE
+trait_eu_subset[genus %in% "Orthocladiinae", `:=`(genus = "Prodiamesinae",
+                                                  taxa = "Prodiamesinae")]
+
+# "Naididae" is Tubificidae (old name, rename back)
+trait_eu_subset[family %in% "Naididae", family := "Tubificidae"]
+
+# Pediciinae -> taxonomical data are on subfamily lvl
+# while trait data are on species lvl and one entry also on sub-family
+# (Pediciini) -> assigned to Pedcciniae
+trait_eu_subset[genus %in% "Pediciini", `:=`(genus = "Pediciinae",
+                                             taxa = "Pediciinae")]
+
+# taxa that are on family-lvl in ecor_L:
+# (and genus or species-level in tachet/freshwaterecol)
+# need to be aggregated via median (likewise in Szöcs et al. 2014)
+trait_cols <- grep("order|family|genus|species|taxa", 
+                   names(trait_eu_subset),
+                   value = TRUE,
+                   invert = TRUE)
+agg_traits <- trait_eu_subset[family %in% c(
+  "Ceratopogonidae",
+  "Empididae",
+  "Lepidostomatidae",
+  "Limoniidae",
+  "Pediciinae",
+  "Perlodidae",
+  "Prodiamesinae",
+  "Psychomyiidae",
+  "Spongillidae",
+  "Chironomidae",
+  "Tubificidae",
+  "Limnephilidae",
+  "Coenagrionidae"
+), lapply(.SD, median, na.rm = TRUE), .SDcols = trait_cols, by = "family"] %>% 
+  normalize_by_rowSum(x = ., 
+                      non_trait_cols = c("order",
+                                         "family",
+                                         "genus",
+                                         "species",
+                                         "taxa"))
+setnames(agg_traits,
+         old = "family",
+         new = "taxa")
+
+# aggregate all Oligochaeta taxa -> are actually (sub)class
+trait_eu_subset[family %in% c(
+  "Haplotaxidae",
+  "Tubificidae",
+  "Enchytraeidae",
+  "Propappidae",
+  "Lumbriculidae",
+  "Dorydrilidae",
+  "Lumbricidae",
+  "Sparganophilidae",
+  "Branchiobdellidae"
+),   sub_class := "Oligochaeta"]
+
+# TODO: Can just aggregate Oligochaeta data in tachet Version from Edi and check
+# with the values in the cache file
+trait_eu_oligo <- trait_eu_subset[sub_class %in% "Oligochaeta",
+                                  lapply(.SD, median, na.rm = TRUE),
+                                  .SDcols = trait_cols,
+                                  by = "sub_class"] %>% 
+  normalize_by_rowSum(x = .,
+                    non_trait_cols = "sub_class")
+trait_eu_oligo[, taxa := "Oligochaeta"]
+
 # subset trait_eu_subset to taxa in ecor_Q
 trait_eu_sal <- trait_eu_subset[taxa %in% rownames(ecor_Q),]
+trait_eu_sal <- rbind(trait_eu_sal, trait_eu_oligo, agg_traits, 
+                      fill = TRUE)
 
 # few NA values in traits: set to 0 (according to Edi's Paper, missing information
 # for traits was set to 0)
 trait_cols <-
   grep(
-    "species|genus|family|order|taxa",
+    "species|genus|family|order|taxa|.*class",
     names(trait_eu_sal),
     value = TRUE,
     invert = TRUE
@@ -168,48 +247,14 @@ trait_eu_sal <- base::merge(trait_eu_sal,
                             ecor_Q,
                             by = "taxa")
 
-# create dataset with taxonomical information
-taxa <- trait_eu_sal[, .(order, family, genus, species)]
+# check if all taxa are covered
+# rownames(ecor_Q)[!rownames(ecor_Q) %in% trait_eu_sal$taxa]
 
-# rm taxonomicla information, create df and assign rownames 
-trait_eu_sal[, c("order", "family", "genus", "species") := NULL]
+# create dataset with taxonomical information
+taxa <- trait_eu_sal[, .(sub_class, order, family, genus, species)]
+
+# rm taxonomical information, create df and assign rownames 
+trait_eu_sal[, c("sub_class", "order", "family", "genus", "species") := NULL]
 setDF(trait_eu_sal)
 rownames(trait_eu_sal) <- trait_eu_sal$taxa
 trait_eu_sal$taxa <- NULL
-
-
-# ____________________________________________________________________________________________
-# TODO: Search for missing taxa -> check if names have changed!
-#### Taxa missing in trait_eu ####
-# check if all taxa of ecor are in the harmonized trait database
-
-# a few taxa are not in our dataset:
-rownames(ecor_Q)[!rownames(ecor_Q) %in% trait_eu_subset$taxa]
-
-# Tubificidae now Naididae
-trait_eu[is.na(species) & is.na(genus) & family %in% "Naididae", ]
-trait_edi_lookup[ID_trait_name %like% "cycle", ]
-
-# missing:
-# search in original tachet & search in scripts
-# "Chaetopterygini"
-# "Limnephilini"
-# "Pediciinae"
-# "Prodiamesinae"
-# "Serratella"
-
-# weighted by Edi somehow -> check tomorrow
-# "Oligochaeta"
-trait_eu[is.na(species) & is.na(genus) & is.na(family), ]
-
-tachet_edi[taxa %in% "Haplotaxis gordioides", ]
-tachet_edi[taxa %in% "Chae.*", ]
-# ____________________________________________________________________________________________
-
-
-
-
-
-
-
-
