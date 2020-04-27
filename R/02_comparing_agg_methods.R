@@ -37,8 +37,9 @@ comp_agg_data <- preproc_dat[c(
   "Traits_US_LauraT_pp_harmonized"
 )]
 
-# aggregation over genus level
-data_complex_agg <- lapply(comp_agg_data, function(y) {
+#### Complex Aggregation ####
+# aggregation over genus level (Mode, Median)
+data_complex_agg_median <- lapply(comp_agg_data, function(y) {
   spec_genus_agg_alt(
     data = y,
     non_trait_cols = c(
@@ -46,17 +47,39 @@ data_complex_agg <- lapply(comp_agg_data, function(y) {
       "family",
       "genus",
       "species"
-    )
+    ),
+    method = agg_fun_median
   ) %>%
     data.table::melt(., id.vars = c("family", "order")) %>%
     setnames(.,
       old = c("value"),
-      new = c("value_genus_fam_agg")
+      new = c("value_genus_fam_agg_median")
     )
 })
 
-# Aggregation directly to family level
-data_direct_agg <- lapply(comp_agg_data, function(y) {
+# aggregation over genus level (Mode, Mean)
+data_complex_agg_mean <- lapply(comp_agg_data, function(y) {
+  spec_genus_agg_alt(
+    data = y,
+    non_trait_cols = c(
+      "order",
+      "family",
+      "genus",
+      "species"
+    ),
+    method = agg_fun_mean
+  ) %>%
+    data.table::melt(., id.vars = c("family", "order")) %>%
+    setnames(.,
+             old = c("value"),
+             new = c("value_genus_fam_agg_mean")
+    )
+})
+
+
+#### Direct aggregation ####
+# Aggregation directly to family level median
+data_direct_agg_median <- lapply(comp_agg_data, function(y) {
   y[!is.na(family), ] %>%
     direct_agg(
       trait_data = .,
@@ -65,63 +88,113 @@ data_direct_agg <- lapply(comp_agg_data, function(y) {
         "family",
         "genus",
         "species"
-      )
+      ),
+      method = median
     ) %>%
     data.table::melt(., id.vars = c("family", "order")) %>%
     setnames(.,
       old = c("value"),
-      new = c("value_direct_agg")
+      new = c("value_direct_agg_median")
     )
 })
 
-# weighted aggregation
+# Aggregation directly to family level mean
+data_direct_agg_mean <- lapply(comp_agg_data, function(y) {
+  y[!is.na(family), ] %>%
+    direct_agg(
+      trait_data = .,
+      non_trait_cols = c(
+        "order",
+        "family",
+        "genus",
+        "species"
+      ),
+      method = mean
+    ) %>%
+    data.table::melt(., id.vars = c("family", "order")) %>%
+    setnames(.,
+             old = c("value"),
+             new = c("value_direct_agg_mean")
+    )
+})
+
+#### Weighted aggregation ####
 # calculate weights 
-# weights_list <- mapply(function(x, y){
-#   compute_weights(init = x,
-#                   preproc = y)},
-#   trait_dat,
-#   preproc_dat,
-#   SIMPLIFY = FALSE)
-# 
-# weights_list <- weights_list[c(
-#   "Trait_AUS_harmonized.rds",
-#   "Trait_EU_pp_harmonized.rds",
-#   "Trait_NZ_pp_harmonized.rds",
-#   "Traits_US_LauraT_pp_harmonized.rds"
-# )]
-# 
-# # aggregate
-# data_weighted_agg <- mapply(function(x, y) {
-#   weighted_agg(
-#     data = x,
-#     non_trait_cols =
-#       c("order",
-#         "family",
-#         "genus",
-#         "species"),
-#     weights = y
-#   ) %>%
-#     data.table::melt(., id.vars = c("family", 
-#                                     "order")) %>%
-#     setnames(.,
-#              old = c("value"),
-#              new = c("value_weighted_agg")
-#     )
-# },
-# comp_agg_data,
-# weights_list,
-# SIMPLIFY = FALSE)
+weights_list <- mapply(function(x, y){
+  compute_weights(init = x,
+                  preproc = y)},
+  trait_dat,
+  preproc_dat,
+  SIMPLIFY = FALSE)
+
+weights_list <- weights_list[c(
+  "Trait_AUS_harmonized.rds",
+  "Trait_EU_pp_harmonized.rds",
+  "Trait_NZ_pp_harmonized.rds",
+  "Traits_US_LauraT_pp_harmonized.rds"
+)]
+
+# aggregate
+data_weighted_agg <- mapply(function(x, y) {
+  weighted_agg(
+    data = x,
+    non_trait_cols =
+      c("order",
+        "family",
+        "genus",
+        "species"),
+    weights = y
+  ) %>%
+    data.table::melt(., id.vars = c("family",
+                                    "order")) %>%
+    setnames(.,
+             old = c("value"),
+             new = c("value_weighted_agg"))
+},
+comp_agg_data,
+weights_list,
+SIMPLIFY = FALSE)
 
 
+#### Results complex vs direct aggregation ####
 # merge results
 results_agg <-
   mapply(function(x, y)
     merge(x, y, by = c("family", "variable", "order")),
-    data_complex_agg,
-    data_direct_agg,
+    data_complex_agg_median,
+    data_direct_agg_median,
     SIMPLIFY = FALSE)
 
 # calculate deviance
 results_agg <- lapply(results_agg,
                       function(y)
-                        y[, deviance := value_genus_fam_agg - value_direct_agg])
+                        y[, deviance := value_genus_fam_agg_median - value_direct_agg_median])
+
+#### Results using mean instead of median in direct aggregation ####
+results_agg_means <- mapply(
+  function(x, y)
+    merge(x, y, by = c("family", "variable", "order")),
+  data_direct_agg_median,
+  data_direct_agg_mean,
+  SIMPLIFY = FALSE
+)
+
+# calculate deviance
+results_agg_means <- lapply(results_agg_means,
+                            function(y)
+                              y[, deviance := value_direct_agg_median - value_direct_agg_mean])
+
+
+#### Results direct agg vs weighted agg ####
+results_agg_dir_weighted <- mapply(
+  function(x, y)
+    merge(x, y, by = c("family", "variable", "order")),
+  data_direct_agg_median,
+  data_weighted_agg,
+  SIMPLIFY = FALSE
+)
+
+# calculate deviance
+results_agg_dir_weighted <- lapply(results_agg_dir_weighted,
+                            function(y)
+                              y[, deviance := value_direct_agg_median - value_weighted_agg])
