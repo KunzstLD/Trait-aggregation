@@ -23,8 +23,7 @@ setDT(chessman_raw)
 
 # subset to feeding information, taxonomical information & size
 chessman_raw <- chessman_raw[, .SD,
-  .SDcols = names(chessman_raw) %like% "Order|Family|.*feeding|.*length"
-]
+  .SDcols = names(chessman_raw) %like% "Order|Family|.*feeding|.*length"]
 
 # Classify continuous varibale length as size
 chessman_raw[, `:=`(
@@ -77,223 +76,273 @@ chessman_raw <- melt(chessman_raw, id.vars = c("family", "order"))
 # correct taxnomoy: "Veneroida" to "Venerida"
 chessman_raw[order %in% "Veneroida", order := "Venerida"]
 
-# combine with results from other aggregation methods
-# see Script 02_comparing_agg_methods
-traitval_aus <- merge(
-  results_agg[["Trait_AUS_harmonized"]],
-  chessman_raw,
-  by = c("family", "variable", "order")
-)
-setnames(traitval_aus,
-  old = c(
-    "deviance",
-    "value"
-  ),
-  new = c(
-    "deviance_complex_direct_agg",
-    "value_famlvl"
-  )
-)
 
-# 
-traitval_aus$order %>% table()
+#### Calculate trait aggregation ####
+
+# calculate aggregation again for subset of traits
+# aggregate again using only the two grouping features feeding mode and size
+preproc_AUS <- trait_dat$Trait_AUS_harmonized.rds[, .SD,
+                                                  .SDcols = names(trait_dat$Trait_AUS_harmonized.rds) %like% "species|genus|family|order|feed.+|size.+"] %>%
+  normalize_by_rowSum(.,
+                      non_trait_cols = c("species",
+                                         "genus",
+                                         "family",
+                                         "order")) %>%
+  .[!is.na(family),]
+
+# save
+# write.csv(
+#   x = preproc_AUS,
+#   file = file.path(
+#     data_out,
+#     "Grouping_feature_DB_harmonized_size_fmode_AUS.csv"
+#   ),
+#   row.names = FALSE
+# )
+
+# stepwise agg median ----
+preproc_AUS_stepwise_median <- spec_genus_agg_alt(
+  trait_data = preproc_AUS,
+  non_trait_cols = c("order",
+                     "family",
+                     "genus",
+                     "species"),
+  method = median
+) %>%
+  data.table::melt(., id.vars = c("family", "order")) %>%
+  setnames(.,
+           old = c("value"),
+           new = c("value.stepwise.agg.median"))
+
+# stepwise agg mean ----
+preproc_AUS_stepwise_mean <- spec_genus_agg_alt(
+  trait_data = preproc_AUS,
+  non_trait_cols = c("order",
+                     "family",
+                     "genus",
+                     "species"),
+  method = mean
+) %>%
+  data.table::melt(., id.vars = c("family", "order")) %>%
+  setnames(.,
+           old = c("value"),
+           new = c("value.stepwise.agg.mean"))
+
+# direct agg median ----
+preproc_AUS_median <- direct_agg(
+  trait_data = preproc_AUS,
+  non_trait_cols = c("order",
+                     "family",
+                     "genus",
+                     "species"),
+  method = median
+) %>%
+  data.table::melt(., id.vars = c("family", "order")) %>%
+  setnames(.,
+           old = c("value"),
+           new = c("value.direct.agg.median"))
+
+# direct agg mean 
+preproc_AUS_mean <- direct_agg(
+    trait_data = preproc_AUS,
+    non_trait_cols = c("order",
+                       "family",
+                       "genus",
+                       "species"),
+    method = mean
+  ) %>%
+  data.table::melt(., id.vars = c("family", "order")) %>%
+  setnames(.,
+           old = c("value"),
+           new = c("value.direct.agg.mean"))
+
+# weighted agg ----
+preproc_AUS_weighted <- weighted_agg(
+  trait_dat = preproc_AUS,
+  non_trait_cols = c("order",
+                     "family",
+                     "genus",
+                     "species")
+) %>%
+  data.table::melt(., id.vars = c("family", "order")) %>%
+  setnames(.,
+           old = c("value"),
+           new = c("value.weighted.agg"))
+
+
+# merge results with trait values from Chessman together
+traitval_aus <- list(chessman_raw,
+                     preproc_AUS_median,
+                     preproc_AUS_mean,
+                     preproc_AUS_stepwise_median,
+                     preproc_AUS_stepwise_mean,
+                     preproc_AUS_weighted
+                     ) %>%
+  Reduce(function(x, y)
+    merge(x, y, by = c("family", "variable", "order")), .)
+
+setnames(traitval_aus,
+         old = "value",
+         new = "value.famlvl")
 
 # create grouping feature column
-traitval_aus[, grouping_feature := sub("(.+)(\\_)(.+)", "\\1", variable)]
+traitval_aus[, grouping.feature := sub("(.+)(\\_)(.+)", "\\1", variable)]
 
-# create subset restricted to certain orders
-# No Dipterans in data 
-traitval_aus_aqi <- traitval_aus[order %in% c(
-  "Ephemeroptera",
-  "Hemiptera",
-  "Odonata",
-  "Trichoptera",
-  "Coleoptera",
-  "Plecoptera",
-  "Diptera",
-  "Lepidoptera",
-  "Megaloptera",
-  "Neuroptera"
-  ), ]
+# orders
+traitval_aus$order %>% table()
+
+# check overlap between aggregated results and chessman
+unique(chessman_raw$family) %in% unique(preproc_AUS_median$family) %>%
+  sum()
+unique(chessman_raw$order)
 
 # _____________________________________________________________________________
 #### Analysis
 # _____________________________________________________________________________
 
+# calculate deviance
 traitval_aus[, `:=`(
-  deviance_dir_fam = value_direct_agg - value_famlvl,
-  deviance_comp_fam = value_genus_fam_agg - value_famlvl
+  deviance.direct.median.fam = value.direct.agg.median - value.famlvl,
+  deviance.direct.mean.fam = value.direct.agg.mean - value.famlvl,
+  deviance.stepwise.median.fam = value.stepwise.agg.median - value.famlvl,
+  deviance.stepwise.mean.fam = value.stepwise.agg.mean - value.famlvl, 
+  deviance.weighted.fam = value.weighted.agg - value.famlvl
 )]
 
-# How many cases overall have been evaluated differently by Chessman?
-# 40.4 % for direct aggregation method
-# 39.8 % for complex aggr
-nrow(traitval_aus[deviance_dir_fam != 0, ]) / nrow(traitval_aus)
-nrow(traitval_aus[deviance_comp_fam != 0, ]) / nrow(traitval_aus)
+# overview over deviations
+traitval_aus_lf <- melt(
+  traitval_aus,
+  measure.vars = c(
+    "deviance.direct.median.fam",
+    "deviance.direct.mean.fam",
+    "deviance.stepwise.median.fam",
+    "deviance.stepwise.mean.fam",
+    "deviance.weighted.fam"
+  ),
+  variable.name = "deviance.vars"
+)
 
-# Which traits mostly differently classified?
-traitval_aus[deviance_comp_fam != 0, .(.N), by = c("variable")] %>% 
-  .[order(-N),]
-traitval_aus[deviance_comp_fam != 0 & variable %in% "feed_herbivore", ] %>%
-  .[, .(.N), by = order] %>% 
-  .[order(-N),]
+# create subset only with cases with different affinity scores
+traitval_aus_lf_diff <- traitval_aus_lf[value != 0, ]
+traitval_aus_lf_diff[, `:=`(
+  abs.value = abs(value),
+  mean.abs.value = mean(abs(value)),
+  sd.abs.value = sd(abs(value))
+),
+by = c("deviance.vars", "grouping.feature")]
 
-# Regarding deviating classification (trait_val compl_agg > fam_assignment)
-# and vice versa: no tendency, almost equal. Also regarding orders
-traitval_aus[deviance_comp_fam > 0, .N, by = "order"] %>%
-  .[order(-N), ]
-traitval_aus[deviance_comp_fam < 0, .N, by = "order"] %>%
-  .[order(-N), ]
+grouping.feature_names_aus = c("feed" = "Feeding mode",
+                               "size" = "Body size")
 
-# Which orders?
-# separate for grouping features
-traitval_aus[deviance_comp_fam != 0, .(.N), by = c("order", 
-                                                   "grouping_feature"), ] %>%
-  .[order(grouping_feature, -N), ]
+annotations_aus <-
+  cbind(traitval_aus_lf_diff[, .N, by = c("deviance.vars", "grouping.feature")],
+        data.frame(x = rep(1:5, each = 2), y = rep(1.2, 10)))
+annotations_aus[, label := paste("N =", N)]
 
-
-# How many taxa/cases are classified differntly?
-nrow(traitval_aus[deviance_comp_fam != 0 &
-  order %in% "Diptera", ]) / nrow(traitval_aus[order %in% "Diptera", ])
-nrow(traitval_aus[deviance_comp_fam != 0 &
-  order %in% "Trichoptera", ]) / nrow(traitval_aus[order %in% "Trichoptera", ])
-nrow(traitval_aus[deviance_comp_fam != 0 &
-  order %in% "Coleoptera", ]) / nrow(traitval_aus[order %in% "Coleoptera", ])
-
-# freq of deviating assessments
-freq_diff <- traitval_aus[, .(n_complete = .N,
-                              family,
-                              variable,
-                              order,
-                              grouping_feature,
-                              deviance_dir_fam), by = "order"] %>%
-  .[deviance_dir_fam != 0, .(n_deviating = .N,
-                              n_complete,
-                              family,
-                              variable,
-                              order,
-                              deviance_dir_fam), by = c("order", "grouping_feature")] %>%
-  .[, .(freq = (n_deviating / n_complete) * 100,
-        order,
-        grouping_feature)]
-
-# re both traits: feeding mode 
-# Odonata trait assignments do not deviate from trait aggregation values
-p_freq_feed <- freq_diff[grouping_feature %in% "feed", ] %>%
-  .[!duplicated(order),] %>% 
-  ggplot(.) +
-  geom_bar(aes(x = as.factor(order), y = freq), stat = 'identity',
-           width = 0.35, fill = "darkblue")+
-  coord_flip()+
-  labs(#title = "Frequency of differntly classified cases for the grouping feature feeding mode",
-       #x = "Order",
-       y = "Frequency in [%]")+
-  theme_light(base_size = 15, base_family = "Poppins") +
-  theme(
-    legend.position = "none",
-    title = element_text(size = 13),
-    axis.title.x = element_text(size = 13),
-    axis.title.y = element_blank(),
-    #axis.text.x = element_text(family = "Roboto Mono", size = 11),
-    axis.text.y = element_text(family = "Roboto Mono", size = 11)#,
-#    panel.grid = element_blank()
-  )
-# size:
-p_freq_size <- freq_diff[grouping_feature %in% "size", ] %>%
-  .[!duplicated(order),] %>% 
-  ggplot(.) +
-  geom_bar(aes(x = as.factor(order), y = freq), stat = 'identity',
-           width = 0.35, fill = "darkblue")+
-  coord_flip()+
-  labs(#title = "Frequency of differntly classified cases for the grouping feature feeding mode",
-       #x = "Order",
-       y = "Cases with deviating trait values between direct aggreation 
-       and trait values assigned at family level [%]")+
-  theme_light(base_size = 15, base_family = "Poppins") +
-  theme(
-    legend.position = "none",
-    title = element_text(size = 13),
-    axis.title.x = element_text(size = 13),
-    axis.title.y = element_blank(),
-#    axis.text.x = element_text(family = "Roboto Mono", size = 11),
-    axis.text.y = element_text(family = "Roboto Mono", size = 11)#,
-#    panel.grid = element_blank()
-  )
-
-# Is it possible to have a meaningul summary plot? How would it look like?
-# Deviation of aggr trait values compared to family assignments per order and trait
-set.seed(123)
-
-# feeding mode:
-p_sum_feed <- ggplot(traitval_aus[grouping_feature %in% "feed",],
-       aes(x = as.factor(order), y = deviance_dir_fam)) +
-  geom_jitter(size = 6,
-              alpha = 0.35,
-              width = 0.15,
-              aes(col = order)) +
-  geom_hline(aes(yintercept = 0), color = "gray70", size = 0.6) +
-  scale_y_continuous(limits = c(-1.1, 1.1), expand = c(0.005, 0.005)) +
-  scale_color_d3()+
-  coord_flip() +
-  labs(x = "Order",
-       y = "Deviance direct aggregation \n and assignments on family level")+
-  facet_wrap( ~ variable) +
-  theme_light(base_size = 15, base_family = "Poppins") +
-  theme(
-    legend.position = "none",
-    axis.title = element_text(size = 13),
-    axis.text.x = element_text(family = "Roboto Mono", size = 11),
-    axis.text.y = element_text(family = "Roboto Mono", size = 11)
-    #    panel.grid = element_blank()
-  )
-ggdraw(p_sum_feed) + draw_plot(p_freq_feed, x = 0.58, y = -0.24, width = 0.52, height = 1,
-                            scale = 0.5)
-
-# size:
-p_sum_size <- ggplot(traitval_aus[grouping_feature %in% "size",],
-       aes(x = as.factor(order), y = deviance_comp_fam)) +
-  geom_jitter(size = 6,
-              alpha = 0.35,
-              width = 0.15,
-              aes(col = order)) +
-  geom_hline(aes(yintercept = 0), color = "gray70", size = 0.6)+
-  scale_y_continuous(limits = c(-1.1, 1.1), expand = c(0.005, 0.005)) +
-  coord_flip() +
-  labs(x = "Order",
-       y = "Deviance direct aggregation \n and assignments on family level")+
-  facet_wrap( ~ variable, nrow = 2) +
-  theme_light(base_size = 15, base_family = "Poppins") +
-  theme(
-    legend.position = "none",
-    axis.title = element_text(size = 13),
-    axis.text.x = element_text(family = "Roboto Mono", size = 11),
-    axis.text.y = element_text(family = "Roboto Mono", size = 11)
-    #    panel.grid = element_blank()
-  )
-ggdraw(p_sum_size) + draw_plot(p_freq_size, x = 0.38, y = -0.25, width = 0.8, height = 1,
-                               scale = 0.5)
-# TODO:Fix x-axis title 
-
-# plot only families where there is an extreme deviance?
-test <- traitval_aus_aqi %>%
-.[deviance_comp_fam < -0.5 | deviance_comp_fam > 0.5, ]
-
-melt(test,
-    id.vars = c("family", "order", "variable", "N", "grouping_feature"),
-    variable.name = "value_type"
-  ) %>%
-.[value_type %in% c("value_genus_fam_agg", "value_famlvl"), ] %>%
- ggplot(
-    data = .,
-    aes(x = as.factor(variable), y = value)
+# Overview plot differences ----
+traitval_aus_lf_diff %>%
+  ggplot(., aes(x = as.factor(deviance.vars), y = abs.value)) +
+  geom_violin(color = "gray") +
+  #  geom_boxplot(alpha = 0.7)+
+  geom_jitter(
+    size = 1.5,
+    width = 0.05,
+    alpha = 0.6,
+    aes(color = grouping.feature)
   ) +
-  geom_point(aes(col = value_type),size = 4)+
-  coord_flip()+
-  facet_wrap(~order)+
-  theme_light(base_size = 15, base_family = "Poppins") +
+  geom_point(aes(x = as.factor(deviance.vars), y = mean.abs.value),
+             size = 3.5,
+             color = "black") +
+  geom_errorbar(
+    aes(
+      x = as.factor(deviance.vars),
+      ymin = mean.abs.value - sd.abs.value,
+      ymax = mean.abs.value + sd.abs.value
+    ),
+    width = 0.15,
+    color = "black"
+  ) +
+  scale_color_uchicago() +
+  coord_flip() +
+  geom_text(
+    data = annotations_aus,
+    aes(x = x,
+        y = y,
+        label = label),
+    colour = "black",
+    inherit.aes = FALSE,
+    parse = FALSE
+  ) +
+  facet_wrap( ~ grouping.feature, labeller = as_labeller(grouping.feature_names_aus)) +
+  labs(x = NULL, y = "Absolute difference") +
+  scale_x_discrete(
+    labels = c(
+      "Difference direct_agg (median) \n and traits assigned at family-level",
+      "Difference direct_agg (mean) \n and traits assigned at family-level",
+      "Difference stepwise_agg (median) \n and traits assigned at family-level",
+      "Difference stepwise_agg (mean) \n and traits assigned at family-level",
+      "Difference weighted_agg \n and traits assigned at family-level"
+    )
+  ) +
+  expand_limits(y = c(0, 1.3))+
+  theme_classic() +
   theme(
-    #legend.position = "none",
+    legend.position = "none",
     axis.title = element_text(size = 12),
-    axis.text.x = element_text(family = "Roboto Mono", size = 10)#,
-#    panel.grid = element_blank()
-  )
+    axis.text.x = element_text(family = "Roboto Mono", size = 11),
+    axis.text.y = element_text(family = "Roboto Mono", size = 11),
+    panel.grid = element_blank()
+  ) 
+ggplot2::ggsave(filename = file.path(data_out, "Deviances_trait_agg_chessman.png"),
+                width = 22,
+                height = 12,
+                units = "cm")
+
+# Overall mean for differing cases per aggregation methods ----
+traitval_aus_lf_diff[, .(
+  mean.abs.value.overall = mean(abs.value),
+  sd.abs.value.overall = sd(abs.value)
+),
+by = "deviance.vars"]
+
+# How many cases overall have been evaluated differently by Chessman? ----
+traitval_aus_lf_diff[, .N/traitval_aus[, .N], by = "deviance.vars"]
+
+# range of deviations ----
+traitval_aus_lf[, range(value), by = "deviance.vars"]
+
+# xtable_wo_rownames(traitval_aus[deviance.median.fam <= -0.6 |
+#                                   deviance.median.fam >= 0.6,
+#                                 .(
+#                                   family,
+#                                   order,
+#                                   variable,
+#                                   value.famlvl,
+#                                   value.direct.agg.median,
+#                                   value.direct.agg.mean
+#                                 )],
+#                    digits = 2)
+
+# summary per order 
+# is this interesting?
+traitval_gt <- tbl_summary(
+  data = traitval_aus_lf_diff[, .(order,
+                                  grouping.feature,
+                                  deviance.vars,
+                                  value, 
+                                  abs.value)],
+  statistic = list(all_continuous() ~ "{mean} ({sd})"),
+  by = "deviance.vars",
+  label = list(value ~ "Mean deviances",
+               abs.value ~ "Mean abs. deviances"),
+  digits = list(value ~ c(3, 2),
+                abs.value ~ c(3, 2))
+) %>%
+  italicize_levels() 
+
+# latex output
+xtable_wo_rownames(traitval_gt$table_body[, c("label", "stat_1", "stat_2")])
+
+# Which traits mostly differently classified? ----
+traitval_aus_lf_diff[, .(.N, family), by = "variable"] %>% 
+  .[order(-N),] %>% View()
