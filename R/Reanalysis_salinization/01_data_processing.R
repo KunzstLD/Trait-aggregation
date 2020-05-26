@@ -251,7 +251,7 @@ trait_eu_sal <- base::merge(trait_eu_sal,
 # rownames(ecor_Q)[!rownames(ecor_Q) %in% trait_eu_sal$taxa]
 
 # create dataset with taxonomical information
-taxa <- trait_eu_sal[, .(sub_class, order, family, genus, species)]
+taxa <- trait_eu_sal[, .(taxa, sub_class, order, family, genus, species)]
 
 # rm taxonomical information, create df and assign rownames 
 trait_eu_sal[, c("sub_class", "order", "family", "genus", "species") := NULL]

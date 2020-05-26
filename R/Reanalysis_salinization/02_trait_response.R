@@ -2,6 +2,8 @@
 #### Trait-responses ####
 # Most code taken from Eduard Szöcs and adapted:
 # script "do_ecor.R"
+# calculation uses harmonized trait data (were available) 
+# and the original (not aggregated) trait information
 # ____________________________________________________________________________________________
 
 # ____________________________________________________________________________________________
@@ -87,7 +89,7 @@ boxplot(
 abline(h = 0, lty = "dotted")
 rug(trait_rda_res$RDA1, side = 4)
 linestack(
-  traitdf_high_sal$RDA1,
+          traitdf_high_sal$RDA1,
   labels = paste(traitdf_high_sal$ID_trait_name, traitdf_high_sal$ID_name, sep = ":"),
   at = par("usr")[2],
   add = TRUE,
@@ -96,7 +98,7 @@ linestack(
 )
 # dev.off()
 
-# Plot Trait distribution on first axis
+# Trait distribution on first axis ----
 trait_rda_res$trait_comb <-
   paste(trait_rda_res$ID_trait_name, trait_rda_res$ID_name, sep = ":")
 setDT(trait_rda_res)
@@ -144,7 +146,7 @@ ggplot(trait_rda_res[ID_trait_name %like% "Feeding|Locomotion|Reproduction|Respi
 #   guides(fill = FALSE) +
 #   scale_fill_manual(values = colors[c(1, 3)])
 
-#### extract only traits related to high salinity ####
+# extract only traits related to high salinity ----
 
 # high salinity traits
 traitdf_high_sal <- traitdf_high_sal[traitdf_high_sal$RDA1 > 0,]
@@ -234,7 +236,7 @@ ggplot(trait_sal_output, aes(x = salinisati, y = value, fill = year)) +
 #        width = 22, height = 14,
 #        units = "cm")
 
-#### lm ####
+# lm ----
 lm_results_new <- trait_sal_output %>%
   group_by(variable) %>%
   do(tidy(lm(logit_value ~ salinisati*year, data=.))) 
