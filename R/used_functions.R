@@ -217,92 +217,31 @@ agg_fun_median <- function(y, na.rm = FALSE) {
     median(y, na.rm = na.rm)
 }
 
-# Aggregation to family level by allocating species entries
-# to genus level using the median.
-# Aggregating to family level is done by mode or median
-# if no duplicate values occur
-spec_genus_agg <- function(data,
-                             non_trait_cols) {
-  # get names of trait columns
-  pat <- paste0(non_trait_cols, collapse = "|")
-  trait_col <- grep(pat, names(data), value = TRUE, invert = TRUE)
-  
-  # aggregate to genus level via median
-  # subset so that no NA values occur in species data
-  # (otherwise all NA entries are viewed as a group &
-  # aggregated as well)
-  trait_data_genus <- data[!is.na(species),
-                           lapply(.SD, median, na.rm = TRUE),
-                           .SDcols = trait_col,
-                           by = genus]
-  
-  # merge family information back
-  # !is.na(species)
-  trait_data_genus[data[!is.na(species)],
-                   `:=`(family = i.family,
-                        order = i.order),
-                   on = "genus"]
-  
-  # bind with data resolved on genus level or family level
-  # TODO: Change to is.na(genus) and add taxa res. on family-level afterwards
-  trait_data_genus <-
-    rbind(trait_data_genus,
-          data[is.na(species) & !is.na(genus), ] %>%
-            .[!genus %in% trait_data_genus$genus, ],
-          fill = TRUE)
-  
-  # # aggregate to family level
-  agg_data <- trait_data_genus[, c(lapply(.SD, function(y) {
-    # for cases like c(0,1), c(0,0,1,1) and c(0,1,0.5)
-    if (length(unique(y)) == length(y) |
-        sum(duplicated(y)) == sum(!duplicated(y))) {
-      median(y, na.rm = TRUE)
-      # e.g. in case (0,0,3)
-      # } else if (Mode(y, na.rm = TRUE) == 0 & !all((y) == 0)) {
-      #   Mode(y[y != 0], na.rm = TRUE)
-    }
-    else {
-      Mode(y, na.rm = TRUE)
-    }
-  })),
-  .SDcols = trait_col,
-  by = "family"]
-  
-  # merge information on order back
-  agg_data[data,
-           `:=`(order = i.order),
-           on = "family"]
-  
-  # # bind data on family-level
-  # if (nrow(data[is.na(species) & is.na(genus), ]) == 0)
-  #   agg_data <- agg_data
-  # else
-  #   agg_data <-
-  #   rbind(agg_data, data[is.na(species) & is.na(genus), ]  %>%
-  #           .[!family %in% agg_data$family, -c("species", "genus")] %>%
-  #           .[!duplicated(family), ])
-}
+# Stepwise aggregation to family-level by allocating species entries
+# to genus level using the median, then aggregating to family-level
+# using a method decided by the user as well.
 
 # spec_genus aggegation using improved agg_function
-spec_genus_agg_alt <- function(data,
+spec_genus_agg_alt <- function(trait_data,
                            non_trait_cols, 
-                           method) {
+                           method,
+                           na.rm = TRUE) {
   # get names of trait columns
   pat <- paste0(non_trait_cols, collapse = "|")
-  trait_col <- grep(pat, names(data), value = TRUE, invert = TRUE)
+  trait_col <- grep(pat, names(trait_data), value = TRUE, invert = TRUE)
   
   # aggregate to genus level via median
   # subset so that no NA values occur in species data
   # (otherwise all NA entries are viewed as a group &
   # aggregated as well)
-  trait_data_genus <- data[!is.na(genus),
-                           lapply(.SD, median, na.rm = TRUE),
+  trait_data_genus <- trait_data[!is.na(genus),
+                           lapply(.SD, method, na.rm = na.rm),
                            .SDcols = trait_col,
-                           by = genus]
+                           by = "genus"]
   
   # merge family information back
   # !is.na(species)
-  trait_data_genus[data[!is.na(genus)],
+  trait_data_genus[trait_data[!is.na(genus)],
                    `:=`(family = i.family,
                         order = i.order),
                    on = "genus"]
@@ -310,16 +249,16 @@ spec_genus_agg_alt <- function(data,
   # bind with data resolved on family level
   trait_data_genus <-
     rbind(trait_data_genus,
-          data[is.na(species) & is.na(genus) & !is.na(family), ],
+          trait_data[is.na(species) & is.na(genus) & !is.na(family), ],
           fill = TRUE)
   
   # aggregate to family level
-  agg_data <- trait_data_genus[, c(lapply(.SD, method)),
+  agg_data <- trait_data_genus[, c(lapply(.SD, method, na.rm = na.rm)),
   .SDcols = trait_col,
   by = "family"]
   
   # merge information on order back
-  agg_data[data,
+  agg_data[trait_data,
            `:=`(order = i.order),
            on = "family"]
 }
@@ -339,7 +278,7 @@ direct_agg <- function(trait_data,
   # aggregated as well)
   agg_data <- trait_data[, lapply(.SD, method, na.rm = na.rm),
     .SDcols = trait_col,
-    by = family
+    by = "family"
   ]
 
   # merge information on order back
@@ -351,58 +290,37 @@ direct_agg <- function(trait_data,
 }
 
 # weighted aggregation
-# compute ratio:
-# genera initially in DB/ genera after selecting only complete profiles
-# (includes entries on genera and species-level)
-# weights are standardized so that they sum up to 1 by dividing each 
-# weight by the sum of all weights within their respective family 
-compute_weights <- function(init, preproc) {
-  # Calc occurrences per genus init
-  init <- init[!is.na(genus), .N, by = "genus"]
-  
-  # Calc occurrences per genus preproc
-  preproc <- preproc[!is.na(genus), .(family,
-                                      order,
-                                      .N),
-                     by = "genus"]
-  # merge and calc standardized weights 
-  weighting <- merge(preproc, 
-                     init, 
-                     by = "genus",
-                     suffixes = c("_preproc", "_init"))
-  weighting <- weighting[!duplicated(genus),]
-  weighting[, coeff := N_preproc/N_init]
-  weighting[, stand_coeff := coeff/sum(coeff), 
-            by = "family"]
-}
-
-# weighted aggregation function
-# trait values on species and genus-level,
-# are multipled by weights and then summed up 
-# per family
-weighted_agg <- function(data, non_trait_cols, weights) {
+# TODO testing
+# Calculates a weighted average based on the number of 
+# species entries per genera 
+weighted_agg <- function(trait_data,
+                         non_trait_cols,
+                         na.rm = TRUE) {
   # get names of trait columns
   pat <- paste0(non_trait_cols, collapse = "|")
-  trait_col <- grep(pat, names(data), value = TRUE, invert = TRUE)
+  trait_col <- grep(pat, names(trait_data), value = TRUE, invert = TRUE)
   
-  # merge weights
-  data[weights,
-       `:=`(stand_coeff = i.stand_coeff),
-       on = "genus"]
+  # create copy
+  data_cp <- copy(trait_data)
   
-  data[!is.na(genus), (trait_col) := lapply(.SD, function(y)
-    y * stand_coeff),
+  # calc weightes
+  data_cp[!is.na(species), coeff := .N,
+          by = "genus"]
+  # assign 1 to coeff entries with NA
+  data_cp[is.na(coeff), coeff := 1]
+  
+  # calculate weighted mean
+  data_cp <- data_cp[, lapply(.SD, function(y)
+    weighted.mean(y, coeff, na.rm = na.rm)),
     .SDcols = trait_col,
-    by = "genus"]
-  data <- data[!duplicated(genus), ]
+    by = "family"]
   
-  output <- data[, lapply(.SD, sum),
-                 .SDcols = trait_col,
-                 by = "family"]
-  # merge order back
-  output[data,
-         `:=`(order = i.order),
-         on = "family"]
+  # merge back information on order
+  data_cp[trait_data, 
+          order := i.order, 
+          on = "family"]
+  
+  return(data_cp)
 }
 
 # TODO: Monitor subset data (how many entries in species/genus)
