@@ -137,22 +137,19 @@ sim_trait_vals <- function(n_traits = 3, mean, sd) {
   val / sum(val)
 }
 
-rnorm(1, c(1, 1, 1, 1, 1), seq(0, 0.5, 0.1))
-
-# base example, same number of species per genus
+#### Base example ####
+# same number of species per genus
 # (5 species per genus, in total 5 genera -> 25 taxa)
 # high variation in traits leads to different results
 # between stepwise median and direct median
 # seems not to influence methods using the mean
 
-
-sim_data_base <- data.table(
-  order = "O1",
-  family = "F1",
-  genus = rep(paste0("G", c(1:5)), each = 5),
-  species = paste0(rep(paste0("SP", c(1:5)), each = 5), "_", c(1:5))
-)
-
+# sim_data_base <- data.table(
+#   order = "O1",
+#   family = "F1",
+#   genus = rep(paste0("G", c(1:5)), each = 5),
+#   species = paste0(rep(paste0("SP", c(1:5)), each = 5), "_", c(1:5))
+# )
 
 output <- list()
 variability <- seq(0.1, 0.5, 0.1)
@@ -179,6 +176,7 @@ for (i in 1:100) {
 }
 base_sim <- lapply(output, rbindlist) %>% rbindlist(., idcol = "run")
 
+# apply aggr. methods
 res_base_sim <- base_sim[, meta_agg(
   data = .SD,
   non_trait_cols = c(
@@ -193,24 +191,94 @@ res_base_sim <- base_sim[, meta_agg(
 by = .(run, sd)
 ]
 
-# rough overview
+# create id col from run and sd
+res_base_sim[, run_id := paste0(run, "_", sd)]
+
+#### Analysis base example ####
+# overview of differences per method and variation
+label_names <- c("0.1" = "sd = 0.1",
+                 "0.2" = "sd = 0.2",
+                 "0.3" = "sd = 0.3",
+                 "0.4" = "sd = 0.4",
+                 "0.5" = "sd = 0.5")
 res_base_sim %>%
   ggplot(., aes(x = method, y = T1)) +
   geom_boxplot() +
-  facet_wrap(~ as.factor(sd))
+  facet_wrap( ~ as.factor(sd), 
+              labeller = as_labeller(label_names)) +
+  coord_flip() +
+  labs(x = "Aggregation method",
+       y = "Trait affinity") +
+  scale_x_discrete(
+    labels = c(
+      "Direct_agg (mean)",
+      "Direct_agg (median)",
+      "Stepwise_agg (mean)",
+      "Stepwise_agg (median)",
+      "Weighted_agg"
+    )
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 12),
+    axis.text.x = element_text(family = "Roboto Mono", size = 11),
+    axis.text.y = element_text(family = "Roboto Mono", size = 11)
+  )
 
 
-# cases where differences between aggr. methods are
+# Cases where differences between aggr. methods are
 # big -> how big?
 # calculate differences for each run and then plot
-diffs_all_vec <- function(x) {
-  diffs <- list()
-  for (i in seq_along(x)) {
-    diffs[[i]] <- x[i] - x
-    # diffs[[i]] <- diffs[[i]][diffs[[i]] <= K]
-  }
-  unlist(diffs)
+result <- list()
+for(i in unique(res_base_sim$run_id)) {
+  # subset to each run
+  subs <- res_base_sim[run_id == i,]
+  
+  # create template with all unique comb of aggr. methods
+  template <- combn(test$method, m = 2) %>% t() %>% as.data.table()
+  template[subs, `:=`(T1_fromV1 = i.T1,
+                      T2_fromV1 = i.T2,
+                      T3_fromV1 = i.T3),
+           on = c(V1 = "method")]
+  template[subs, `:=`(T1_fromV2 = i.T1,
+                      T2_fromV2 = i.T2,
+                      T3_fromV2 = i.T3),
+           on = c(V2 = "method")]
+  template[, `:=`(
+    diff_T1 = T1_fromV1 - T1_fromV2,
+    diff_T2 = T2_fromV1 - T2_fromV2,
+    diff_T3 = T3_fromV1 - T3_fromV2
+  )]
+  
+  # save output
+  result[[i]] <- template
 }
-res_base_sim[sd == 0.5, lapply(.SD, diffs_all_vec), by = run, 
-.SDcols = c("T1", "T2", "T3")] %>% 
-.[, summary(.SD)]
+res_single_runs <- rbindlist(result, idcol = "run_id")
+res_single_runs[, comparison := paste0(V1, "_VS_", V2)]
+res_single_runs[, sd := as.numeric(sub("[0-9]{1,}\\_", "", run_id))]
+
+# lf
+res_single_runs <- melt(
+  res_single_runs,
+  measure.vars = c("diff_T1", "diff_T2", "diff_T3"),
+  value.name = "differences"
+)
+# when differences occur, only for 
+# dir_median vs stepwise median
+# direct mean vs stepwise median
+# stepwise mean vs stepwise median
+# direct mean vs direct median
+# stepwise median vs weighed agg
+# Trait variability: 0.3 and greater
+# Max diff ~ 0.2
+res_single_runs[differences > 0.1, ] %>% 
+  .[, unique(comparison)]
+
+res_single_runs[, summary(differences)] #%>% 
+  .[, unique(comparison)]
+
+
+
+
+
