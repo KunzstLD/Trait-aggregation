@@ -44,7 +44,7 @@ lapply(preproc_cp, function(y) retrieve_tax_hierarchy(x = y))
 overview_hierarchy <- lapply(preproc_cp, function(y) {
   y[, .(
     nr_unique_genus,
-    entry_on_specis,
+    entry_on_species,
     family
   )] %>%
     .[!is.na(nr_unique_genus), ] %>%
@@ -56,7 +56,7 @@ overview_hierarchy %>%
   rbindlist(., idcol = "dataset") %>%
   .[dataset == "Trait_freshecol_2020_pp_harmonized", ] %>%
   .[nr_unique_genus <= 50, ] %>%
-  ggplot(., aes(x = nr_unique_genus, y = entry_on_specis)) +
+  ggplot(., aes(x = nr_unique_genus, y = entry_on_species)) +
   geom_point() +
   facet_wrap(~dataset) +
   theme_bw() +
@@ -83,7 +83,7 @@ lapply(overview_hierarchy, function(y) {
 # frequency species entries
 lapply(overview_hierarchy, function(y) {
   Hmisc::describe(y) %>%
-    .[["entry_on_specis"]] %>%
+    .[["entry_on_species"]] %>%
     .[["values"]]
 }) %>%
   rbindlist(., idcol = "dataset")
@@ -92,7 +92,7 @@ lapply(overview_hierarchy, function(y) {
 lapply(preproc_cp, function(y) {
   y[, .(
     nr_unique_genus,
-    entry_on_specis,
+    entry_on_species,
     family
   )] %>%
     .[!is.na(nr_unique_genus), ] %>% # don't regard entries on family-lvl
@@ -101,7 +101,7 @@ lapply(preproc_cp, function(y) {
   rbindlist(., idcol = "dataset") %>%
   melt(., measure.vars = c(
     "nr_unique_genus",
-    "entry_on_specis"
+    "entry_on_species"
   )) %>%
   ggplot(.) +
   geom_violin(aes(x = as.factor(dataset), y = value)) +
@@ -119,65 +119,94 @@ overview_bind <- overview_hierarchy %>%
   rbindlist(., idcol = "dataset")
 
 
+
 #### Simulation ####
-test <- copy(preproc_cp$Trait_freshecol_2020_pp_harmonized)
 
-# nr. species per genus
-test <- test[family == "Baetidae", .SD,
-  .SDcols = names(test) %like% "^species|^genus|^family|^order|feed.*"
-]
-test <- test[!is.nan(feed_shredder), ]
+# look at the real data:
+# test <- copy(preproc_cp$Trait_freshecol_2020_pp_harmonized)
+# # # nr. species per genus
+# test <- test[family == "Baetidae", .SD,
+#   .SDcols = names(test) %like% "^species|^genus|^family|^order|feed.*"
+# ]
+# test <- test[!is.nan(feed_shredder), ]
 
+## =====================================================
+# Pre-thoughts:
+# 25 values for a fixed sd are simulated in each run
+# 100 runs + 5 sds -> 500
+# 500*25 = 12500 rows!
+# 12500 * simulated datasets
+## =====================================================
+set.seed(1234)
 
-# simulate trait values with different variabilities
-sim_trait_vals <- function(n_traits = 3, mean, sd) {
-  val <- rnorm(n = n_traits, mean = mean, sd = sd)
-  # set values smaller as zero to zero
-  val[val < 0] <- 0
-  val / sum(val)
-}
+# simulate data
+sim_data <- list(
+  
+  # Base example:
+  # same number of species per genus
+  # (5 species per genus, in total 5 genera -> 25 taxa)
+  "sim_base" = data.table(
+    order = "O1",
+    family = "F1",
+    genus = rep(paste0("G", 1:5), each = 5),
+    species = paste0(rep(paste0("SP", 1:5), each = 5), "_", 1:5)
+  ),
+  
+  # Gradient:
+  # One genus covering ~50 of the species listed in one family
+  # rest equal
+  "sim_grad1" = data.table(
+    order = "O1",
+    family = "F1",
+    genus = c(rep("G1", 13), rep(paste0("G", 2:5), each = 3)),
+    species = c(paste0("SP1_", 1:13), paste0(rep(
+      paste0("SP", 2:5), each = 3
+    ), "_", 1:3))
+  )
+)
 
-#### Base example ####
-# same number of species per genus
-# (5 species per genus, in total 5 genera -> 25 taxa)
-# high variation in traits leads to different results
-# between stepwise median and direct median
-# seems not to influence methods using the mean
-
-# sim_data_base <- data.table(
-#   order = "O1",
-#   family = "F1",
-#   genus = rep(paste0("G", c(1:5)), each = 5),
-#   species = paste0(rep(paste0("SP", c(1:5)), each = 5), "_", c(1:5))
-# )
-
-output <- list()
+# do the simulation
 variability <- seq(0.1, 0.5, 0.1)
+
 sim_variab <- list()
+sim_intm <- list()
+output <- list()
 
-for (i in 1:100) {
-  for (j in seq_along(variability)) {
-    sim_data_base <- data.table(
-      order = "O1",
-      family = "F1",
-      genus = rep(paste0("G", c(1:5)), each = 5),
-      species = paste0(rep(paste0("SP", c(1:5)), each = 5), "_", c(1:5)),
-      sd = variability[[j]]
-    )
-
-    sim_variab[[j]] <- sim_data_base[, c("T1", "T2", "T3") := replicate(25,
-      sim_trait_vals(mean = 0.5, sd = variability[[j]]),
-      simplify = "matrix"
-    ) %>%
-      t() %>%
-      as.data.table()]
+for(d in names(sim_data)) {
+  dat <- sim_data[[d]]
+  for (i in 1:100) {
+    for (k in seq_along(variability)) {
+      dat <- dat[, .(order,
+                     family,
+                     genus,
+                     species,
+                     sd = variability[[k]])]
+      sim_variab[[k]] <-
+        dat[, c("T1", "T2", "T3") := replicate(25,
+                                               sim_trait_vals(mean = 0.5, sd = variability[[k]]),
+                                               simplify = "matrix") %>%
+              t() %>%
+              as.data.table()]
+    }
+    sim_intm[[i]] <- sim_variab
   }
-  output[[i]] <- sim_variab
+  output[[d]] <- sim_intm
 }
-base_sim <- lapply(output, rbindlist) %>% rbindlist(., idcol = "run")
+output <- rbindlist(output, idcol = "simulation")
 
+# data.table with list columns
+# use unnest from dplyr!
+sim_result <- list()
+
+for(nam in paste0("V", 1:100)) {
+  sim_result[[nam]] <-
+    output[, unnest(.SD, cols = all_of(nam)), .SDcols = c("simulation", nam)]
+}
+sim_result <- rbindlist(sim_result, idcol = "run")
+head(sim_result) %>% View
 # apply aggr. methods
-res_base_sim <- base_sim[, meta_agg(
+# 5 aggr methods * 2 Simulations * 100 runs * 5 sd levels = 5000 rows
+res_base_sim <- sim_result[, meta_agg(
   data = .SD,
   non_trait_cols = c(
     "species",
@@ -185,23 +214,25 @@ res_base_sim <- base_sim[, meta_agg(
     "family",
     "order",
     "run",
-    "sd"
+    "sd",
+    "simulation"
   )
 ),
-by = .(run, sd)
+by = .(simulation, run, sd)
 ]
 
 # create id col from run and sd
 res_base_sim[, run_id := paste0(run, "_", sd)]
 
-#### Analysis base example ####
+
+#### Graphical overview ####
 # overview of differences per method and variation
 label_names <- c("0.1" = "sd = 0.1",
                  "0.2" = "sd = 0.2",
                  "0.3" = "sd = 0.3",
                  "0.4" = "sd = 0.4",
                  "0.5" = "sd = 0.5")
-res_base_sim %>%
+res_base_sim[simulation == "sim_grad1", ] %>%
   ggplot(., aes(x = method, y = T1)) +
   geom_boxplot() +
   facet_wrap( ~ as.factor(sd), 
@@ -227,36 +258,55 @@ res_base_sim %>%
   )
 
 
+#### Analysis single runs ####
 # Cases where differences between aggr. methods are
 # big -> how big?
-# calculate differences for each run and then plot
-result <- list()
-for(i in unique(res_base_sim$run_id)) {
+# calculate differences within each run
+diffs <- list()
+for(i in unique(res_base_sim$run_id)){
   # subset to each run
   subs <- res_base_sim[run_id == i,]
   
   # create template with all unique comb of aggr. methods
-  template <- combn(test$method, m = 2) %>% t() %>% as.data.table()
-  template[subs, `:=`(T1_fromV1 = i.T1,
+  template <- combn(unique(subs$method), m = 2) %>% t() %>% as.data.table()
+  template[, comparison := paste0(V1, "_VS_",V2)]
+  
+  # include also the different simulation types
+  template_1 <- expand.grid("comparison" = template$comparison, 
+                        "simulation" = unique(subs$simulation))
+  setDT(template_1)
+
+  # paste V1 and V2 back 
+  template_1[template, `:=`(V1 = i.V1,
+                            V2 = i.V2),
+             on = "comparison"]
+    
+  # merge to obtain trait information for comparison
+  template_1[subs, `:=`(T1_fromV1 = i.T1,
                       T2_fromV1 = i.T2,
                       T3_fromV1 = i.T3),
-           on = c(V1 = "method")]
-  template[subs, `:=`(T1_fromV2 = i.T1,
+           on = c(V1 = "method", 
+                  simulation = "simulation")]
+  template_1[subs, `:=`(T1_fromV2 = i.T1,
                       T2_fromV2 = i.T2,
                       T3_fromV2 = i.T3),
-           on = c(V2 = "method")]
-  template[, `:=`(
+           on = c(V2 = "method",
+                  simulation = "simulation")]
+  
+  # calc differences of trait affinities for the different methods
+  template_1[, `:=`(
     diff_T1 = T1_fromV1 - T1_fromV2,
     diff_T2 = T2_fromV1 - T2_fromV2,
     diff_T3 = T3_fromV1 - T3_fromV2
   )]
   
   # save output
-  result[[i]] <- template
+  diffs[[i]] <- template_1
 }
-res_single_runs <- rbindlist(result, idcol = "run_id")
-res_single_runs[, comparison := paste0(V1, "_VS_", V2)]
-res_single_runs[, sd := as.numeric(sub("[0-9]{1,}\\_", "", run_id))]
+
+# 10 comparisons * 500 run_ids * 2 sim_methods
+res_single_runs <- rbindlist(diffs, idcol = "run_id")
+res_single_runs[, sd := as.numeric(sub("V[0-9]{1,}\\_", "", run_id))]
 
 # lf
 res_single_runs <- melt(
@@ -264,19 +314,33 @@ res_single_runs <- melt(
   measure.vars = c("diff_T1", "diff_T2", "diff_T3"),
   value.name = "differences"
 )
-# when differences occur, only for 
+
+res_single_runs[differences > 0.1, ] %>% 
+  .[, unique(comparison)]
+
+res_single_runs[, summary(differences)] %>% 
+  .[, unique(comparison)]
+
+
+## =================================================
+# Results:
+# base example:
+# - high variation in traits leads to different results
+# - seems (almost) not to influence methods using the mean
+# - when differences occur, only for:
 # dir_median vs stepwise median
 # direct mean vs stepwise median
 # stepwise mean vs stepwise median
 # direct mean vs direct median
 # stepwise median vs weighed agg
-# Trait variability: 0.3 and greater
-# Max diff ~ 0.2
-res_single_runs[differences > 0.1, ] %>% 
-  .[, unique(comparison)]
+# when Trait variability: 0.3 and greater
+# - Max diff: ~ 0.2
+# - Highest variation in trait affinities by median aggr
+# methods (stepwise > direct)
 
-res_single_runs[, summary(differences)] #%>% 
-  .[, unique(comparison)]
+## =================================================
+
+    
 
 
 
