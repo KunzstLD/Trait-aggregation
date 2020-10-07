@@ -135,13 +135,12 @@ overview_bind <- overview_hierarchy %>%
 # 25 values for a fixed sd are simulated in each run
 # 100 runs + 5 sds -> 500
 # 500*25 = 12500 rows!
-# 12500 * simulated datasets
+# 12500 * simulated datasets (3)
 ## =====================================================
 set.seed(1234)
 
-# simulate data
+# - simulate taxonomic data
 sim_data <- list(
-  
   # Base example:
   # same number of species per genus
   # (5 species per genus, in total 5 genera -> 25 taxa)
@@ -152,59 +151,67 @@ sim_data <- list(
     species = paste0(rep(paste0("SP", 1:5), each = 5), "_", 1:5)
   ),
   
-  # Gradient:
+  # "Extreme" example:
   # One genus covering ~50 of the species listed in one family
   # rest equal
-  "sim_grad1" = data.table(
+  "sim_extrm" = data.table(
     order = "O1",
     family = "F1",
     genus = c(rep("G1", 13), rep(paste0("G", 2:5), each = 3)),
     species = c(paste0("SP1_", 1:13), paste0(rep(
       paste0("SP", 2:5), each = 3
     ), "_", 1:3))
+  ),
+  
+  # "Variation" example:
+  # every genus has different amount of species
+  "sim_variation" = data.table(
+    order = "O1",
+    family = "F1",
+    genus = c(
+      rep("G1", 8),
+      rep("G2", 2),
+      rep("G3", 7),
+      rep("G4", 3),
+      rep("G2", 5)
+    ),
+    species = c(
+      paste0("SP1_", 1:8),
+      paste0("SP2_", 1:2),
+      paste0("SP3_", 1:7),
+      paste0("SP2_", 1:3),
+      paste0("SP2_", 1:5)
+    )
   )
 )
 
-# do the simulation
+# - do the simulation
 variability <- seq(0.1, 0.5, 0.1)
 
 sim_variab <- list()
 sim_intm <- list()
-output <- list()
 
-for(d in names(sim_data)) {
-  dat <- sim_data[[d]]
-  for (i in 1:100) {
-    for (k in seq_along(variability)) {
-      dat <- dat[, .(order,
-                     family,
-                     genus,
-                     species,
-                     sd = variability[[k]])]
-      sim_variab[[k]] <-
-        dat[, c("T1", "T2", "T3") := replicate(25,
-                                               sim_trait_vals(mean = 0.5, sd = variability[[k]]),
-                                               simplify = "matrix") %>%
-              t() %>%
-              as.data.table()]
-    }
-    sim_intm[[i]] <- sim_variab
+for (i in 1:100) {
+  for (k in seq_along(variability)) {
+    dat <- data.table(sd = rep(variability[[k]], 25))
+    sim_variab[[k]] <-
+      dat[, c("T1", "T2", "T3") := replicate(25,
+                                             sim_trait_vals(mean = 0.5, sd = variability[[k]]),
+                                             simplify = "matrix") %>%
+            t() %>%
+            as.data.table()]
   }
-  output[[d]] <- sim_intm
+  sim_intm[[i]] <- sim_variab
 }
-output <- rbindlist(output, idcol = "simulation")
 
-# data.table with list columns
-# use unnest from dplyr!
-sim_result <- list()
+# bind together and take advantage of the fact that R 
+# "recycles" rows when binding
+sim_intm <- lapply(sim_intm, rbindlist) %>%
+  rbindlist(., idcol = "run")
+sim_result <- lapply(sim_data, function(y) cbind(y, sim_intm)) %>% 
+  rbindlist(., idcol = "simulation")
 
-for(nam in paste0("V", 1:100)) {
-  sim_result[[nam]] <-
-    output[, unnest(.SD, cols = all_of(nam)), .SDcols = c("simulation", nam)]
-}
-sim_result <- rbindlist(sim_result, idcol = "run")
-head(sim_result) %>% View
-# apply aggr. methods
+# - apply aggr. methods
 # 5 aggr methods * 2 Simulations * 100 runs * 5 sd levels = 5000 rows
 res_base_sim <- sim_result[, meta_agg(
   data = .SD,
@@ -220,47 +227,11 @@ res_base_sim <- sim_result[, meta_agg(
 ),
 by = .(simulation, run, sd)
 ]
-
-# create id col from run and sd
 res_base_sim[, run_id := paste0(run, "_", sd)]
 
 
-#### Graphical overview ####
-# overview of differences per method and variation
-label_names <- c("0.1" = "sd = 0.1",
-                 "0.2" = "sd = 0.2",
-                 "0.3" = "sd = 0.3",
-                 "0.4" = "sd = 0.4",
-                 "0.5" = "sd = 0.5")
-res_base_sim[simulation == "sim_grad1", ] %>%
-  ggplot(., aes(x = method, y = T1)) +
-  geom_boxplot() +
-  facet_wrap( ~ as.factor(sd), 
-              labeller = as_labeller(label_names)) +
-  coord_flip() +
-  labs(x = "Aggregation method",
-       y = "Trait affinity") +
-  scale_x_discrete(
-    labels = c(
-      "Direct_agg (mean)",
-      "Direct_agg (median)",
-      "Stepwise_agg (mean)",
-      "Stepwise_agg (median)",
-      "Weighted_agg"
-    )
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "none",
-    axis.title = element_text(size = 12),
-    axis.text.x = element_text(family = "Roboto Mono", size = 11),
-    axis.text.y = element_text(family = "Roboto Mono", size = 11)
-  )
-
-
 #### Analysis single runs ####
-# Cases where differences between aggr. methods are
-# big -> how big?
+# Find cases that with large differences produced by aggr. methods
 # calculate differences within each run
 diffs <- list()
 for(i in unique(res_base_sim$run_id)){
@@ -304,7 +275,7 @@ for(i in unique(res_base_sim$run_id)){
   diffs[[i]] <- template_1
 }
 
-# 10 comparisons * 500 run_ids * 2 sim_methods
+# 10 comparisons * 500 run_ids * 3 sim_methods
 res_single_runs <- rbindlist(diffs, idcol = "run_id")
 res_single_runs[, sd := as.numeric(sub("V[0-9]{1,}\\_", "", run_id))]
 
@@ -314,12 +285,18 @@ res_single_runs <- melt(
   measure.vars = c("diff_T1", "diff_T2", "diff_T3"),
   value.name = "differences"
 )
+# take abs of differences
+res_single_runs[, abs_differences := abs(differences)]
+res_single_runs[differences > 0.1, .(comparison, run_id, .N), by = simulation] %>% View
 
-res_single_runs[differences > 0.1, ] %>% 
-  .[, unique(comparison)]
 
-res_single_runs[, summary(differences)] %>% 
-  .[, unique(comparison)]
+#### Graphical analysis ####
+
+# 
+
+# How often differences between Aggr. methods 
+# greater than - e.g. 0.1 - for each run per simulation?
+
 
 
 ## =================================================
