@@ -186,7 +186,7 @@ sim_data <- list(
 )
 
 # - do the simulation
-variability <- seq(0.1, 0.5, 0.1)
+variability <- seq(0.2, 1, 0.2)
 
 sim_variab <- list()
 sim_intm <- list()
@@ -277,7 +277,7 @@ for(i in unique(res_base_sim$run_id)){
 
 # 10 comparisons * 500 run_ids * 3 sim_methods
 res_single_runs <- rbindlist(diffs, idcol = "run_id")
-res_single_runs[, sd := as.numeric(sub("V[0-9]{1,}\\_", "", run_id))]
+res_single_runs[, sd := as.numeric(sub("[0-9]{1,}\\_", "", run_id))]
 
 # lf
 res_single_runs <- melt(
@@ -287,15 +287,146 @@ res_single_runs <- melt(
 )
 # take abs of differences
 res_single_runs[, abs_differences := abs(differences)]
-res_single_runs[differences > 0.1, .(comparison, run_id, .N), by = simulation] %>% View
+res_single_runs[abs_differences > 0.1, .(comparison, run_id, .N), by = simulation] %>% View
 
 
 #### Graphical analysis ####
+res_base_sim[, method := factor(
+  method,
+  levels = c(
+    "direct_mean",
+    "stepwise_mean",
+    "weighted_agg",
+    "direct_median",
+    "stepwise_median"
+  )
+)]
 
-# 
+# - overview of aggregated trait values :
+label_names <- c("0.2" = "sd = 0.2",
+                 "0.4" = "sd = 0.4",
+                 "0.6" = "sd = 0.6",
+                 "0.8" = "sd = 0.8",
+                 "1" = "sd = 1.0")
+res_base_sim %>%
+  ggplot(., aes(x = as.factor(simulation), y = T1)) +
+  geom_boxplot(aes(fill = as.factor(method)), alpha = 0.5) +
+  scale_fill_uchicago()+
+  facet_wrap( ~ as.factor(sd), labeller = as_labeller(label_names)) +
+  labs(x = "Simulation type", 
+       y = "Trait affinitiy T1", 
+       fill = "Aggregation method")+
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 12),
+    axis.text.x = element_text(family = "Roboto Mono", size = 11),
+    axis.text.y = element_text(family = "Roboto Mono", size = 11),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(family = "Roboto Mono", size = 11)
+  )
+for (link in c(data_out, data_paper)) {
+  ggplot2::ggsave(
+    filename = file.path(link, "Overview_sim_results.png"),
+    width = 25,
+    height = 13,
+    units = "cm"
+  )
+}
 
+# - Overview of individual runs: 
 # How often differences between Aggr. methods 
 # greater than - e.g. 0.1 - for each run per simulation?
+res_single_runs[abs_differences >= 0.1, 
+                .(.N, abs_differences, differences, sd), 
+                by = simulation] 
+
+# which comparisons show the greatest differences? 
+res_single_runs[abs_differences >= 0.1, 
+                .N,
+                by = .(simulation, comparison)] 
+
+# plot preparations
+res_single_runs[, comparison := factor(
+  comparison,
+  levels = c(
+    "stepwise_median_VS_weighted_agg",
+    "direct_median_VS_stepwise_median",
+    "direct_mean_VS_stepwise_median",
+    "stepwise_mean_VS_weighted_agg",
+    "stepwise_mean_VS_stepwise_median",
+    "direct_median_VS_weighted_agg",
+    "direct_median_VS_stepwise_mean",
+    "direct_mean_VS_direct_median",
+    "direct_mean_VS_stepwise_mean",
+    "direct_mean_VS_weighted_agg"
+  )
+)]
+
+single_run_diffs <- res_single_runs[abs_differences >= 0.1,
+                                  .(differences, abs_differences, .N),
+                                  by = .(comparison, simulation, sd)]
+single_run_diffs[, `:=`(
+  max_abs_diff = max(abs_differences),
+  min_abs_diff = min(abs_differences)
+),
+by = .(comparison,
+       simulation,
+       sd)]
+
+# plot
+ggplot() +
+  geom_pointrange(
+    data = single_run_diffs,
+    mapping = aes(
+      x = as.factor(comparison),
+      y = abs_differences, 
+      ymin = min_abs_diff,
+      ymax = max_abs_diff,
+      color = as.factor(simulation)
+    ),
+    position = position_dodge(width = .8),
+    alpha = 0.7
+  ) +
+  labs(x = "Comparison", 
+       y = "Absolute differences", 
+       color = "Simulation type")+
+  scale_color_uchicago() +
+  scale_x_discrete(
+    labels = c("Stepwise_agg (median) - \n Weighted_agg", 
+               "Direct_agg (median) - \n Stepwise_agg (median)", 
+               "Direct_agg (mean) - \n Stepwise_agg (median)", 
+               "Stepwise_agg (mean) - \n Weighted_agg",
+               "Stepwise_agg (mean) - \n Stepwise_agg (median)",
+               "Direct_agg (median) - \n Weighted_agg",
+               "Direct_agg (median) - \n Stepwise_mean"))+
+  facet_wrap( ~  as.factor(sd), 
+              labeller = as_labeller(label_names)) +
+  coord_flip() +
+  theme_bw() +
+  theme(
+    #legend.position = "none",
+    axis.title = element_text(size = 12),
+    axis.text.x = element_text(family = "Roboto Mono", size = 11),
+    axis.text.y = element_text(family = "Roboto Mono", size = 11),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(family = "Roboto Mono", size = 11)
+  )
+
+# Number of deviating cases
+# Include simulation types!
+ggplot(single_run_diffs, aes(x = comparison, y = N)) + 
+  geom_point(aes(color = as.factor(simulation)), 
+             position = position_dodge(width = 0.8))+
+#  facet_wrap(~ as.factor(sd))+
+  coord_flip()
+
+single_run_diffs[comparison == "stepwise_median_VS_weighted_agg" & sd == 0.4, ]
+
+  # labs(title="Ordered Bar Chart", 
+  #      subtitle="Make Vs Avg. Mileage", 
+  #      caption="source: mpg") + 
+  # theme(axis.text.x = element_text(angle=65, vjust=0.6))
+
 
 
 
@@ -304,16 +435,15 @@ res_single_runs[differences > 0.1, .(comparison, run_id, .N), by = simulation] %
 # base example:
 # - high variation in traits leads to different results
 # - seems (almost) not to influence methods using the mean
-# - when differences occur, only for:
-# dir_median vs stepwise median
-# direct mean vs stepwise median
-# stepwise mean vs stepwise median
-# direct mean vs direct median
-# stepwise median vs weighed agg
+# - when differences occur, mainly for:
+# dir_median vs stepwise median 
+
 # when Trait variability: 0.3 and greater
 # - Max diff: ~ 0.2
 # - Highest variation in trait affinities by median aggr
 # methods (stepwise > direct)
+
+
 
 ## =================================================
 
