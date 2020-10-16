@@ -465,14 +465,44 @@ retrieve_tax_hierarchy <- function(x) {
 
 # ___________________________________________________________________
 #### Simulate trait values with different variabilities ####
-# for n_traits values from a normal distr. are 
-# sampled. Values below zero are truncated to zero.
-# values are stored in a vector and normalized so that their sum
-# is one
+# for n_traits values from a truncated normal distr. are 
+# sampled and normalized to one. 
 # ___________________________________________________________________
-sim_trait_vals <- function(n_traits = 3, mean, sd) {
-  val <- rnorm(n = n_traits, mean = mean, sd = sd)
-  # set values smaller as zero to zero
-  val[val < 0] <- 0
+sim_trait_vals <- function(n_traits = 3,
+                           lower_bound = 0,
+                           upper_bound = 1,
+                           mean,
+                           sd) {
+  val <- rtruncnorm(
+    n = n_traits,
+    a = lower_bound,
+    b = upper_bound,
+    mean = mean,
+    sd = sd
+  )
   val / sum(val)
 }
+# - Alternative code: 
+# Values below zero are truncated to zero.
+# values are stored in a vector and normalized
+# so that their sum is one:
+# repeat {
+#   x <- rnorm(n = 3, mean = 0.5, sd = 0.5)
+#   # set values smaller as zero to zero
+#   x[x < 0] <- 0
+#   if (sum(x) > 0) {
+#     break
+#   }
+# }
+# x / sum(x)
+# x
+
+
+
+
+
+
+
+
+
+
