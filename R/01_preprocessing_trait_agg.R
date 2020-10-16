@@ -6,18 +6,13 @@
 # load
 trait_dat <- load_data(path = "./Data/", pattern = "harmonized\\.rds")
 
-# taxonomical corrections
+# taxonomic corrections
 source(file = "./R/taxonomical_corrections.R")
 
-# feeding mode parasite: not present in NZ data
-# Add these taxa to critical taxa table!
-# lapply(trait_dat[c("Trait_AUS_harmonized.rds",
-#                    "Trait_EU_pp_harmonized.rds",
-#                    "Traits_US_LauraT_pp_harmonized.rds")],
-#        function(y) y[feed_parasite > 0, ])
-trait_dat$Trait_EU_pp_harmonized.rds[,  feed_parasite := NULL]
-trait_dat$Trait_AUS_harmonized.rds[,  feed_parasite := NULL]
-trait_dat$Traits_US_LauraT_pp_harmonized.rds[,  feed_parasite := NULL]
+# feeding mode parasite: not present in NZ data 
+# has been checked, probably most of the taxa there are no parasites
+# 0 assigned
+trait_dat$Trait_NZ_pp_harmonized.rds[, feed_parasite := 0]
 
 # chose traits, normalize and omit incomplete information
 # for trait aggregation comparison
