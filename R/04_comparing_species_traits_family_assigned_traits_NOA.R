@@ -89,34 +89,42 @@ setnames(
 # harmonize locomotion so that this grouping features matches with the harmonized trait set
 # sessil does not exist as category
 noa_trait_matrix[, locom_swim := apply(.SD, 1, max),
-                 .SDcols = c("locom_swim", "locom_skate")]
+  .SDcols = c("locom_swim", "locom_skate")
+]
 noa_trait_matrix[, locom_crawl := apply(.SD, 1, max),
-                 .SDcols = c("locom_sprawl", "locom_climb", "locom_cling")]
+  .SDcols = c("locom_sprawl", "locom_climb", "locom_cling")
+]
 
 # rm unnecessary cols
 noa_trait_matrix[, c("locom_skate", "locom_sprawl", "locom_climb", "locom_cling") := NULL]
 
 # noarmalize for meaningful comparison
-normalize_by_rowSum(x = noa_trait_matrix,
-                    non_trait_cols = c("order", "family"))
+normalize_by_rowSum(
+  x = noa_trait_matrix,
+  non_trait_cols = c("order", "family")
+)
 
 # convert back to lf
 noa_trait_matrix <-
   melt(noa_trait_matrix, id.vars = c("order", "family"))
 
-#### Calculate Aggregation for NOA subset data #### 
+#### Calculate Aggregation for NOA subset data ####
 preproc_NOA <- trait_dat$Traits_US_LauraT_pp_harmonized.rds[, .SD,
-                                                  .SDcols = 
-                                                    names(trait_dat$Traits_US_LauraT_pp_harmonized.rds) 
-                                                  %like% "species|genus|family|order|feed.+|size.+|resp.+|volt.+|locom.+"] %>%
+  .SDcols =
+    names(trait_dat$Traits_US_LauraT_pp_harmonized.rds)
+    %like% "species|genus|family|order|feed.+|size.+|resp.+|volt.+|locom.+"
+] %>%
   normalize_by_rowSum(.,
-                      non_trait_cols = c("species",
-                                         "genus",
-                                         "family",
-                                         "order")) %>%
-  .[!is.na(family),]
+    non_trait_cols = c(
+      "species",
+      "genus",
+      "family",
+      "order"
+    )
+  ) %>%
+  .[!is.na(family), ]
 
-# save 
+# save
 # write.csv(
 #   x = preproc_NOA,
 #   file = file.path(
@@ -129,92 +137,112 @@ preproc_NOA <- trait_dat$Traits_US_LauraT_pp_harmonized.rds[, .SD,
 # stepwise agg median ----
 preproc_NOA_stepwise_median <- spec_genus_agg_alt(
   trait_data = preproc_NOA,
-  non_trait_cols = c("order",
-                     "family",
-                     "genus",
-                     "species"),
+  non_trait_cols = c(
+    "order",
+    "family",
+    "genus",
+    "species"
+  ),
   method = median
 ) %>%
   data.table::melt(., id.vars = c("family", "order")) %>%
   setnames(.,
-           old = c("value"),
-           new = c("value.stepwise.agg.median"))
+    old = c("value"),
+    new = c("value.stepwise.agg.median")
+  )
 
 # stepwise agg mean ----
 preproc_NOA_stepwise_mean <- spec_genus_agg_alt(
   trait_data = preproc_NOA,
-  non_trait_cols = c("order",
-                     "family",
-                     "genus",
-                     "species"),
+  non_trait_cols = c(
+    "order",
+    "family",
+    "genus",
+    "species"
+  ),
   method = mean
 ) %>%
   data.table::melt(., id.vars = c("family", "order")) %>%
   setnames(.,
-           old = c("value"),
-           new = c("value.stepwise.agg.mean"))
+    old = c("value"),
+    new = c("value.stepwise.agg.mean")
+  )
 
 # direct agg median ----
 preproc_NOA_median <- direct_agg(
   trait_data = preproc_NOA,
-  non_trait_cols = c("order",
-                     "family",
-                     "genus",
-                     "species"),
+  non_trait_cols = c(
+    "order",
+    "family",
+    "genus",
+    "species"
+  ),
   method = median
 ) %>%
   data.table::melt(., id.vars = c("family", "order")) %>%
   setnames(.,
-           old = c("value"),
-           new = c("value.direct.agg.median"))
+    old = c("value"),
+    new = c("value.direct.agg.median")
+  )
 
-# direct agg mean ---- 
+# direct agg mean ----
 preproc_NOA_mean <- direct_agg(
   trait_data = preproc_NOA,
-  non_trait_cols = c("order",
-                     "family",
-                     "genus",
-                     "species"),
+  non_trait_cols = c(
+    "order",
+    "family",
+    "genus",
+    "species"
+  ),
   method = mean
 ) %>%
   data.table::melt(., id.vars = c("family", "order")) %>%
   setnames(.,
-           old = c("value"),
-           new = c("value.direct.agg.mean"))
+    old = c("value"),
+    new = c("value.direct.agg.mean")
+  )
 
 # weighted agg ----
 preproc_NOA_weighted <- weighted_agg(
   trait_dat = preproc_NOA,
-  non_trait_cols = c("order",
-                     "family",
-                     "genus",
-                     "species")
+  non_trait_cols = c(
+    "order",
+    "family",
+    "genus",
+    "species"
+  )
 ) %>%
   data.table::melt(., id.vars = c("family", "order")) %>%
   setnames(.,
-           old = c("value"),
-           new = c("value.weighted.agg"))
+    old = c("value"),
+    new = c("value.weighted.agg")
+  )
 
-# merge results form aggregation together 
-traitval_noa <- list(noa_trait_matrix,
-                     preproc_NOA_median,
-                     preproc_NOA_mean, 
-                     preproc_NOA_stepwise_median,
-                     preproc_NOA_stepwise_mean,
-                     preproc_NOA_weighted) %>%
-  Reduce(function(x, y)
-    merge(x, y, by = c("family", "variable", "order")), .)
+# merge results form aggregation together
+traitval_noa <- list(
+  noa_trait_matrix,
+  preproc_NOA_median,
+  preproc_NOA_mean,
+  preproc_NOA_stepwise_median,
+  preproc_NOA_stepwise_mean,
+  preproc_NOA_weighted
+) %>%
+  Reduce(function(x, y) {
+    merge(x, y, by = c("family", "variable", "order"))
+  }, .)
+
 setnames(traitval_noa,
-         old = "value",
-         new = "value.famlvl")
+  old = "value",
+  new = "value.famlvl"
+)
 
 # create grouping feature column
-traitval_noa[, grouping.feature := sub("(\\_)(.+)", "",variable)]
+traitval_noa[, grouping.feature := sub("(\\_)(.+)", "", variable)]
 
 # orders
 traitval_noa$order %>% table()
 
-# check overlap between aggregated results and chessman
+# check overlap between aggregated results and pyne
 unique(noa_trait_matrix$family) %in% unique(preproc_NOA$family) %>%
   sum()
 
@@ -227,7 +255,7 @@ traitval_noa[, `:=`(
   deviance.direct.median.fam = value.direct.agg.median - value.famlvl,
   deviance.direct.mean.fam = value.direct.agg.mean - value.famlvl,
   deviance.stepwise.median.fam = value.stepwise.agg.median - value.famlvl,
-  deviance.stepwise.mean.fam = value.stepwise.agg.mean - value.famlvl, 
+  deviance.stepwise.mean.fam = value.stepwise.agg.mean - value.famlvl,
   deviance.weighted.fam = value.weighted.agg - value.famlvl
 )]
 
@@ -251,7 +279,8 @@ traitval_noa_lf_diff[, `:=`(
   mean.abs.value = mean(abs(value)),
   sd.abs.value = sd(abs(value))
 ),
-by = c("deviance.vars", "grouping.feature")]
+by = c("deviance.vars", "grouping.feature")
+]
 
 # Overview plot differences ----
 grouping.feature_names <- c(
@@ -263,41 +292,59 @@ grouping.feature_names <- c(
 )
 
 annotations <-
-  cbind(traitval_noa_lf_diff[, .N, by = c("deviance.vars", "grouping.feature")],
-        data.frame(x = rep(1:5, each = 5), y = rep(1.2, 25)))
+  cbind(
+    traitval_noa_lf_diff[, .N, by = c("deviance.vars", "grouping.feature")],
+    data.frame(x = rep(1:5, each = 5), y = rep(1.25, 25))
+  )
 annotations[, label := paste("N =", N)]
 
+# order of grouping features same as in the AUS comparison 
+traitval_noa_lf_diff[, grouping.feature := factor(grouping.feature,
+  levels = c("feed", "size", "resp", "locom", "volt")
+)]
+
+# plot
 traitval_noa_lf_diff %>%
   ggplot(., aes(x = as.factor(deviance.vars), y = abs.value)) +
-  geom_violin(color = "gray") +
-  #  geom_boxplot(alpha = 0.7)+
+  geom_violin(
+    color = "gray45",
+    draw_quantiles = c(0.25, 0.5, 0.75)
+  ) +
   geom_jitter(
     size = 1.5,
     width = 0.1,
-    alpha = 0.6,
-    aes(color = grouping.feature)
+    alpha = 0.1,
+  #  aes(color = grouping.feature)
   ) +
-  geom_point(aes(x = as.factor(deviance.vars), y = mean.abs.value),
-             size = 3.5,
-             color = "black") +
+  stat_summary(fun = mean, 
+               geom = "point",
+               size = 3.5,
+               color = "dodgerblue4")+
   geom_errorbar(
     aes(
       x = as.factor(deviance.vars),
       ymin = mean.abs.value - sd.abs.value,
       ymax = mean.abs.value + sd.abs.value
     ),
-    width = 0.15,
-    color = "black"
+    size = 0.7, 
+    width = 0.3,
+    color = "dodgerblue4"
   ) +
-  scale_color_uchicago()+
+  scale_color_uchicago() +
   coord_flip() +
-  facet_wrap(~grouping.feature, labeller = as_labeller(grouping.feature_names))+
-  geom_text(data = annotations, aes(x = x, 
-                                    y = y, 
-                                    label = label), 
-            colour="black",
-            inherit.aes=FALSE,
-            parse=FALSE)+
+  facet_wrap(~grouping.feature,
+    labeller = as_labeller(grouping.feature_names)
+  ) +
+  geom_text(
+    data = annotations, aes(
+      x = x,
+      y = y,
+      label = label
+    ),
+    colour = "black",
+    inherit.aes = FALSE,
+    parse = FALSE
+  ) +
   labs(x = NULL, y = "Absolute difference", color = "Grouping feature") +
   scale_x_discrete(
     labels = c(
@@ -308,69 +355,74 @@ traitval_noa_lf_diff %>%
       "Difference weighted_agg \n and traits assigned at family-level"
     )
   ) +
-  expand_limits(y = c(0, 1.35))+
+  expand_limits(y = c(0, 1.35)) +
   theme_classic() +
   theme(
     legend.position = "none",
     axis.title = element_text(size = 12),
-    axis.text.x = element_text(family = "Roboto Mono", size = 11),
-    axis.text.y = element_text(family = "Roboto Mono", size = 11),
+    axis.text.x = element_text(family = "Roboto Mono", size = 9),
+    axis.text.y = element_text(family = "Roboto Mono", size = 9),
     # legend.title = element_text(size = 12),
     # legend.text = element_text(size = 11),
     panel.grid = element_blank()
-  ) 
-ggplot2::ggsave(filename = file.path(data_out, "Deviances_trait_agg_chessman.png"),
-                width = 22,
-                height = 12,
-                units = "cm")
-
-# TODO: report also overall mean for different aggregation methods ----
-traitval_noa_lf_diff[, .(
-  mean.abs.value.overall = mean(abs.value),
-  sd.abs.value.overall = sd(abs.value)
-),
-by = "deviance.vars"]
+  )
+for (link in c(data_out, data_paper)) {
+  ggplot2::ggsave(
+    filename = file.path(link, "Deviances_trait_agg_pyne.png"),
+    width = 25,
+    height = 13,
+    units = "cm"
+  )
+}
 
 # How many cases overall have been evaluated differently by Pyne? ----
-traitval_aus_lf_diff[, .N/traitval_aus[, .N], by = "deviance.vars"]
+# range of deviations
+noa_result_tbl <- traitval_noa_lf_diff[, .(
+  dev_cases = .N / traitval_noa[, .N] * 100,
+  min_diff_affinity = min(abs.value),
+  max_diff_affinity = max(abs.value),
+  mean_diff_affinities = mean(abs.value),
+  sd_diff_affinities = sd(abs.value)
+),
+by = "deviance.vars"
+]
 
-# range of deviations 
-traitval_noa_lf_diff[, range(value), by = "deviance.vars"]
+# combine with table from aus (see 03_comparing_species_traits_family_assigned_traits.R script)
+final_tbl <- rbindlist(list(
+  "Australia" = aus_result_tbl,
+  "North America" = noa_result_tbl
+),
+idcol = "database"
+)
 
-# latex output highest deviations
-xtable_wo_rownames(traitval_noa_lf_diff[abs.value == 1,
-                                .(
-                                  family,
-                                  order,
-                                  grouping.feature,
-                                  deviance.vars,
-                                  abs.value,
-                                  value.famlvl,
-                                  value.direct.agg.median,
-                                  value.direct.agg.mean,
-                                  value.stepwise.agg.median, 
-                                  value.stepwise.agg.mean, 
-                                  value.weighted.agg
-                                )],
-                   digits = 2)
+xtable_wo_rownames(final_tbl,
+  caption = "",
+  digits = 3
+)
 
 # gt summary output
 traitval_gt <- tbl_summary(
-  data = traitval_noa_lf_diff[, -c("family",
-                                   "variable",
-                                   "grouping.feature", 
-                                   "value.direct.agg.median", 
-                                   "value.direct.agg.mean",
-                                   "value.stepwise.agg.median",
-                                   "value.stepwise.agg.mean",
-                                   "value.weighted.agg",
-                                   "value.famlvl")],
+  data = traitval_noa_lf_diff[, -c(
+    "family",
+    "variable",
+    "grouping.feature",
+    "value.direct.agg.median",
+    "value.direct.agg.mean",
+    "value.stepwise.agg.median",
+    "value.stepwise.agg.mean",
+    "value.weighted.agg",
+    "value.famlvl"
+  )],
   statistic = list(all_continuous() ~ "{mean} ({sd})"),
   by = "deviance.vars",
-  label = list(value ~ "Mean deviances",
-               abs.value ~ "Mean abs. deviances"),
-  digits = list(value ~ c(3, 2),
-                abs.value ~ c(3, 2))
+  label = list(
+    value ~ "Mean deviances",
+    abs.value ~ "Mean abs. deviances"
+  ),
+  digits = list(
+    value ~ c(3, 2),
+    abs.value ~ c(3, 2)
+  )
 ) %>%
   italicize_levels()
 
@@ -384,32 +436,42 @@ for (grf in unique(traitval_summary_noa$grouping_feature)) {
   plot_list[[grf]] <- traitval_summary_noa[grouping_feature %in% grf, ] %>%
     ggplot(., aes(x = order, y = deviance_dir_fam)) +
     geom_point(size = 2) +
-    geom_jitter(size = 1.5, 
-                height = 0,
-                width = 0.15) +
+    geom_jitter(
+      size = 1.5,
+      height = 0,
+      width = 0.15
+    ) +
     geom_boxplot(alpha = 0.7) +
     ylim(-1, 1) +
     geom_hline(yintercept = 0, linetype = "dashed") +
-    labs(x = "Order",
-         y = "Deviance in affinity") +
+    labs(
+      x = "Order",
+      y = "Deviance in affinity"
+    ) +
     coord_flip() +
-    facet_wrap( ~ variable) +
-    theme_light(base_size = 15) + #,base_family = "Poppins"
+    facet_wrap(~variable) +
+    theme_light(base_size = 15) + # ,base_family = "Poppins"
     theme(
       legend.position = "none",
       axis.title = element_text(size = 12),
       axis.text.x = element_text(family = "Roboto Mono", size = 10),
       axis.text.y = element_text(family = "Roboto Mono", size = 10)
     )
-  
+
   # save
-  ggplot2::ggsave(filename = file.path(data_out, 
-                                       paste0("Deviances_dir_median_noa_", 
-                                              names(plot_list[grf]),".png")),
-                  width = 22,
-                  height = 12,
-                  units = "cm",
-                  dpi = 800)
+  ggplot2::ggsave(
+    filename = file.path(
+      data_out,
+      paste0(
+        "Deviances_dir_median_noa_",
+        names(plot_list[grf]), ".png"
+      )
+    ),
+    width = 22,
+    height = 12,
+    units = "cm",
+    dpi = 800
+  )
 }
 
 
@@ -418,21 +480,23 @@ for (grf in unique(traitval_summary_noa$grouping_feature)) {
 
 # traits which most often deviated
 traitval_noa
-traitval_noa[deviance_dir_fam == 0, .N, by = "grouping_feature"] %>% 
+traitval_noa[deviance_dir_fam == 0, .N, by = "grouping_feature"] %>%
   .[order(-N), ]
 
-# highest deviation of 1 or -1 
-traitval_noa[deviance_dir_fam == 1|deviance_dir_fam == -1, unique(grouping_feature)]
+# highest deviation of 1 or -1
+traitval_noa[deviance_dir_fam == 1 | deviance_dir_fam == -1, unique(grouping_feature)]
 
 total <- traitval_noa[, .N, by = "variable"] %>% .[, N]
 traitval_noa[deviance_dir_fam != 0, .(.N),
-             by = c("variable")] %>%
+  by = c("variable")
+] %>%
   .[order(-N), N / total]
 
 # Latex output:
 # direct_fam
 traitval_noa[deviance_dir_fam != 0, .(.N),
-             by = c("variable")] %>%
+  by = c("variable")
+] %>%
   .[order(-N), .(
     Trait = variable,
     `Families differently evaluated [%]` =
@@ -449,7 +513,8 @@ traitval_noa[deviance_dir_fam != 0, .(.N),
 
 # comp_fam
 traitval_noa[deviance_comp_fam != 0, .(.N),
-             by = c("variable")] %>%
+  by = c("variable")
+] %>%
   .[order(-N), .(
     Trait = variable,
     `Families differently evaluated [%]` =
@@ -465,11 +530,11 @@ traitval_noa[deviance_comp_fam != 0, .(.N),
 
 #### Which orders?
 # Ephmeroptera, Diptera
-total <- traitval_noa[, .N, by = c("order")] %>% .[order(-N),]
+total <- traitval_noa[, .N, by = c("order")] %>% .[order(-N), ]
 
 # latex output
 traitval_noa[deviance_dir_fam != 0, .(variable, .N), by = "order"] %>%
-  merge(x = . , y = total, by = "order") %>%
+  merge(x = ., y = total, by = "order") %>%
   .[, .(
     Order = order,
     `Families differently evaluated direct_agg [%]` = round((N.x / N.y) * 100, digits = 2)
@@ -477,80 +542,92 @@ traitval_noa[deviance_dir_fam != 0, .(variable, .N), by = "order"] %>%
   .[!duplicated(Order), ] %>%
   .[order(-`Families differently evaluated direct_agg [%]`), ] %>%
   xtable_wo_rownames(.,
-                     caption = "Percentage of families differently evaluated
+    caption = "Percentage of families differently evaluated
                      by  and Pyne et al. for all compared orders",
-                     label = "tab:SI_perc_dir_agg_expert_family_NOA")
+    label = "tab:SI_perc_dir_agg_expert_family_NOA"
+  )
 
 # stepwise agg latex output
 traitval_noa[deviance_comp_fam != 0, .(variable, .N), by = "order"] %>%
-  merge(x = . , y = total, by = "order") %>%
+  merge(x = ., y = total, by = "order") %>%
   .[, .(
     Order = order,
     `Families differently evaluated stepwise_agg [%]` = round((N.x /
-                                                                 N.y) * 100, digits = 2)
+      N.y) * 100, digits = 2)
   )] %>%
-  .[!duplicated(Order),] %>%
-  .[order(-`Families differently evaluated stepwise_agg [%]`),] %>%
+  .[!duplicated(Order), ] %>%
+  .[order(-`Families differently evaluated stepwise_agg [%]`), ] %>%
   xtable_wo_rownames(.,
-                     caption = "Percentage of families differently evaluated
+    caption = "Percentage of families differently evaluated
                      by  and Pyne et al. for all compared orders",
-                     label = "tab:SI_perc_stepwise_agg_expert_family_NOA")
+    label = "tab:SI_perc_stepwise_agg_expert_family_NOA"
+  )
 
 # SD in deviance dir_fam
 traitval_noa[, sd_dir_fam := sd(deviance_dir_fam), by = c("order", "variable")]
-traitval_noa[order(-sd_dir_fam), .(family,
-                                   order,
-                                   variable,
-                                   sd_dir_fam,
-                                   value_direct_agg,
-                                   value_famlvl)] %>% View()
+traitval_noa[order(-sd_dir_fam), .(
+  family,
+  order,
+  variable,
+  sd_dir_fam,
+  value_direct_agg,
+  value_famlvl
+)] %>% View()
 
 # Regarding deviating classification (trait_val compl_agg > fam_assignment)
 # and vice versa: no tendency, almost equal
 traitval_noa[deviance_comp_fam > 0, .(.N, variable), by = "order"] %>%
-  .[order(-N),]
+  .[order(-N), ]
 traitval_noa[deviance_comp_fam < 0, .N, by = "order"] %>%
-  .[order(-N),]
+  .[order(-N), ]
 
 #### How big are the deviances actually?
 # direct aggreation with at family-level assigned traits
 total <- traitval_noa[deviance_dir_fam != 0, .N]
 
 # dev 0.25
-traitval_noa[deviance_dir_fam != 0, .(family,
-                                      order,
-                                      variable,
-                                      value_direct_agg,
-                                      value_famlvl,
-                                      deviance_dir_fam)] %>%
-  .[abs(deviance_dir_fam) <= 0.25,]
+traitval_noa[deviance_dir_fam != 0, .(
+  family,
+  order,
+  variable,
+  value_direct_agg,
+  value_famlvl,
+  deviance_dir_fam
+)] %>%
+  .[abs(deviance_dir_fam) <= 0.25, ]
 
 
 # dev. 0.5
-traitval_noa[deviance_dir_fam != 0, .(family,
-                                      order,
-                                      variable,
-                                      value_direct_agg,
-                                      value_famlvl,
-                                      deviance_dir_fam)] %>%
+traitval_noa[deviance_dir_fam != 0, .(
+  family,
+  order,
+  variable,
+  value_direct_agg,
+  value_famlvl,
+  deviance_dir_fam
+)] %>%
   .[abs(deviance_dir_fam) %between% c(0.26, 0.5), .N / total]
-traitval_noa[deviance_dir_fam != 0, .(family,
-                                      order,
-                                      variable,
-                                      value_direct_agg,
-                                      value_famlvl,
-                                      deviance_dir_fam)] %>%
-  .[abs(deviance_dir_fam) %between% c(0.26, 0.5),]
+traitval_noa[deviance_dir_fam != 0, .(
+  family,
+  order,
+  variable,
+  value_direct_agg,
+  value_famlvl,
+  deviance_dir_fam
+)] %>%
+  .[abs(deviance_dir_fam) %between% c(0.26, 0.5), ]
 
 
 # dev 0.75
-traitval_noa[deviance_dir_fam != 0, .(family,
-                                      order,
-                                      variable,
-                                      value_direct_agg,
-                                      value_famlvl,
-                                      deviance_dir_fam)] %>%
-  .[abs(deviance_dir_fam) == 0.75,]
+traitval_noa[deviance_dir_fam != 0, .(
+  family,
+  order,
+  variable,
+  value_direct_agg,
+  value_famlvl,
+  deviance_dir_fam
+)] %>%
+  .[abs(deviance_dir_fam) == 0.75, ]
 
 # dev 1
 traitval_noa[deviance_dir_fam != 0, .(
@@ -562,7 +639,7 @@ traitval_noa[deviance_dir_fam != 0, .(
   value_famlvl,
   deviance_dir_fam
 )] %>%
-  .[abs(deviance_dir_fam) == 1,] %>%
+  .[abs(deviance_dir_fam) == 1, ] %>%
   Hmisc::describe()
 
 # stepwise aggregation with at family-level assigned traits
@@ -577,15 +654,15 @@ traitval_noa[deviance_comp_fam != 0, .(
   value_famlvl,
   deviance_comp_fam
 )] %>%
-  .[abs(deviance_comp_fam) == 1,] %>%
+  .[abs(deviance_comp_fam) == 1, ] %>%
   Hmisc::describe()
 
 # How many taxa/cases are classified differntly per order?
 nrow(traitval_noa[deviance_comp_fam != 0 &
-                    order %in% "Ephemeroptera",]) / nrow(traitval_noa[order %in% "Ephemeroptera",])
+  order %in% "Ephemeroptera", ]) / nrow(traitval_noa[order %in% "Ephemeroptera", ])
 nrow(traitval_noa[deviance_comp_fam != 0 &
-                    order %in% "Diptera",]) / nrow(traitval_noa[order %in% "Diptera",])
+  order %in% "Diptera", ]) / nrow(traitval_noa[order %in% "Diptera", ])
 nrow(traitval_noa[deviance_comp_fam != 0 &
-                    order %in% "Trichoptera",]) / nrow(traitval_noa[order %in% "Trichoptera",])
+  order %in% "Trichoptera", ]) / nrow(traitval_noa[order %in% "Trichoptera", ])
 nrow(traitval_noa[deviance_comp_fam != 0 &
-                    order %in% "Coleoptera",]) / nrow(traitval_noa[order %in% "Coleoptera",])
+  order %in% "Coleoptera", ]) / nrow(traitval_noa[order %in% "Coleoptera", ])

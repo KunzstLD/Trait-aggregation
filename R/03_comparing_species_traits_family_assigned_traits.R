@@ -75,11 +75,10 @@ chessman_raw <- melt(chessman_raw, id.vars = c("family", "order"))
 
 # correct taxnomoy: "Veneroida" to "Venerida"
 chessman_raw[order %in% "Veneroida", order := "Venerida"]
-
+chessman_raw$variable %>% unique()
 
 #### Calculate trait aggregation ####
 
-# calculate aggregation again for subset of traits
 # aggregate again using only the two grouping features feeding mode and size
 preproc_AUS <- trait_dat$Trait_AUS_harmonized.rds[, .SD,
                                                   .SDcols = names(trait_dat$Trait_AUS_harmonized.rds) %like% "species|genus|family|order|feed.+|size.+"] %>%
@@ -89,7 +88,6 @@ preproc_AUS <- trait_dat$Trait_AUS_harmonized.rds[, .SD,
                                          "family",
                                          "order")) %>%
   .[!is.na(family),]
-
 # save
 # write.csv(
 #   x = preproc_AUS,
@@ -99,6 +97,32 @@ preproc_AUS <- trait_dat$Trait_AUS_harmonized.rds[, .SD,
 #   ),
 #   row.names = FALSE
 # )
+
+# all families in chessman are present in preproc_AUS
+chessman_raw$family %in% preproc_AUS$family %>% all
+
+# compare orders -> some families have been classified differently by chessman
+target_orders <- chessman_raw[!order %in% preproc_AUS$order, order] %>% unique
+target_families <- chessman_raw[order %in% target_orders, family] %>% unique
+
+# take classification preproc_AUS via merge
+chessman_raw[preproc_AUS[family %in% target_families, .(family, order)],
+             order := i.order,
+             on = "family"]
+
+# post analysis revealed few more families that were differently classified
+chessman_raw[preproc_AUS[family %in% c(
+  "Bdellidae",
+  "Bithyniidae",
+  "Cyzicidae",
+  "Enchytraeidae",
+  "Erythraeidae",
+  "Hydrococcidae",
+  "Pisidiidae",
+  "Pomatiopsidae"
+), .(family, order)],
+order := i.order,
+on = "family"]
 
 # stepwise agg median ----
 preproc_AUS_stepwise_median <- spec_genus_agg_alt(
@@ -188,14 +212,6 @@ setnames(traitval_aus,
 # create grouping feature column
 traitval_aus[, grouping.feature := sub("(.+)(\\_)(.+)", "\\1", variable)]
 
-# orders
-traitval_aus$order %>% table()
-
-# check overlap between aggregated results and chessman
-unique(chessman_raw$family) %in% unique(preproc_AUS_median$family) %>%
-  sum()
-unique(chessman_raw$order)
-
 # _____________________________________________________________________________
 #### Analysis
 # _____________________________________________________________________________
@@ -231,7 +247,7 @@ traitval_aus_lf_diff[, `:=`(
 ),
 by = c("deviance.vars", "grouping.feature")]
 
-grouping.feature_names_aus = c("feed" = "Feeding mode",
+grouping.feature_names_aus <- c("feed" = "Feeding mode",
                                "size" = "Body size")
 
 annotations_aus <-
@@ -242,25 +258,27 @@ annotations_aus[, label := paste("N =", N)]
 # Overview plot differences ----
 traitval_aus_lf_diff %>%
   ggplot(., aes(x = as.factor(deviance.vars), y = abs.value)) +
-  geom_violin(color = "gray") +
-  #  geom_boxplot(alpha = 0.7)+
+  geom_violin(color = "gray45", 
+              draw_quantiles = c(0.25, 0.5, 0.75),
+              linetype = "solid") +
   geom_jitter(
-    size = 1.5,
+    size = 2,
     width = 0.05,
-    alpha = 0.6,
-    aes(color = grouping.feature)
+    alpha = 0.2,
+    #aes(color = grouping.feature)
   ) +
-  geom_point(aes(x = as.factor(deviance.vars), y = mean.abs.value),
-             size = 3.5,
-             color = "black") +
+  stat_summary(fun = mean, 
+               geom = "point",
+               size = 5,
+               color = "dodgerblue4")+
   geom_errorbar(
     aes(
       x = as.factor(deviance.vars),
       ymin = mean.abs.value - sd.abs.value,
       ymax = mean.abs.value + sd.abs.value
     ),
-    width = 0.15,
-    color = "black"
+    width = 0.3,
+    color = "dodgerblue4",
   ) +
   scale_color_uchicago() +
   coord_flip() +
@@ -293,10 +311,14 @@ traitval_aus_lf_diff %>%
     axis.text.y = element_text(family = "Roboto Mono", size = 11),
     panel.grid = element_blank()
   ) 
-ggplot2::ggsave(filename = file.path(data_out, "Deviances_trait_agg_chessman.png"),
-                width = 22,
-                height = 12,
-                units = "cm")
+for(link in c(data_out, data_paper)) {
+  ggplot2::ggsave(
+    filename = file.path(link, "Deviances_trait_agg_chessman.png"),
+    width = 22,
+    height = 12,
+    units = "cm"
+  )
+}
 
 # Overall mean for differing cases per aggregation methods ----
 traitval_aus_lf_diff[, .(
@@ -306,22 +328,19 @@ traitval_aus_lf_diff[, .(
 by = "deviance.vars"]
 
 # How many cases overall have been evaluated differently by Chessman? ----
-traitval_aus_lf_diff[, .N/traitval_aus[, .N], by = "deviance.vars"]
+# range of deviations, mean, sd, min, max
+aus_result_tbl <- traitval_aus_lf_diff[, .(
+  dev_cases = .N / traitval_aus[, .N] * 100,
+  min_diff_affinity = min(abs.value),
+  max_diff_affinity = max(abs.value),
+  mean_diff_affinities = mean(abs.value),
+  sd_diff_affinities = sd(abs.value)
+),
+by = "deviance.vars"] 
 
-# range of deviations ----
-traitval_aus_lf[, range(value), by = "deviance.vars"]
-
-# xtable_wo_rownames(traitval_aus[deviance.median.fam <= -0.6 |
-#                                   deviance.median.fam >= 0.6,
-#                                 .(
-#                                   family,
-#                                   order,
-#                                   variable,
-#                                   value.famlvl,
-#                                   value.direct.agg.median,
-#                                   value.direct.agg.mean
-#                                 )],
-#                    digits = 2)
+xtable_wo_rownames(aus_result_tbl,
+                   caption = "",
+                   digits = 3)
 
 # summary per order 
 # is this interesting?
