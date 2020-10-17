@@ -15,15 +15,16 @@
 # ecor_L <-
 #   ecor_L[, names(ecor_L)[names(ecor_L) %in% rownames(trait_eu_sal)]]
 
+original <- agg_data$original
+
 # weight by square-root transformed abundance
 trans <- 0.5
 ecor_cwm_new <-
-  prop.table(as.matrix(ecor_L^ trans), 1) %*% as.matrix(trait_eu_sal)
+  prop.table(as.matrix(ecor_L^ trans), 1) %*% as.matrix(original)
 class <- factor(ecor_R$salinisati)
 
 # rda
 cwmRDA_new <- rda(ecor_cwm_new ~ cond, data = ecor_R)
-summary(cwmRDA_new)
 anova(cwmRDA_new, strata = ecor_R$year, step = 1000)
 
 # 2D plot
