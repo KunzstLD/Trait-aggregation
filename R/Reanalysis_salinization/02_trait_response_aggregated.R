@@ -10,7 +10,9 @@
 # load data
 agg_data <- readRDS(file = "./Data/Re-analysis_cache/agg_data.rds")
 
+
 # calculate rda ----
+# TODO: needs to load data from 01_data_processing
 trait_dat <- lapply(agg_data, function(y) weighted.rda(trait.data = y))
 
 # explained variance
@@ -20,6 +22,7 @@ lapply(trait_dat, function(y) explained.var(y[[1]])) %>%
 # site and species scores (only RDA axis)
 trait_dat_species_scores <- lapply(trait_dat, function(y) extract.species.scores(y[[1]])) %>%
   rbindlist(., idcol = "id")
+
 
 # merge traits
 trait_dat_species_scores <- merge(trait_dat_species_scores,
@@ -104,9 +107,10 @@ for (path in c(data_out, data_paper)) {
 
 #### boxplot comparison ####
 # TODO: Needs improvement, especially label size
-# png(filename = file.path(data_out, "RDA_traits.png"),
-#     width = 1600,
-#     height = 866)
+class <- factor(ecor_R$salinisati)
+scl = 3
+colvec <- c("red", "orange", "green")
+
 par(mar = c(5, 4, 4, 15))
 par(cex.lab=1.1) # is for y-axis
 par(cex.axis=1.1) # is for x-axis
@@ -132,10 +136,6 @@ linestack(
 
 
 #### biplot ####
-class <- factor(ecor_R$salinisati)
-scl = 3
-colvec <- c("red", "orange", "green")
-
 plot(trait_dat$not_aggregated$cwmRDA, display = "sites", type = "none")
 points(
   trait_dat$not_aggregated$cwmRDA,
@@ -156,4 +156,9 @@ legend(
   pch = 16
 )
 ordisurf(trait_dat$stepw_median$cwmRDA ~ cond, data = ecor_R, add = TRUE)
+plot(trait_dat$not_aggregated$cwmRDA)
+
+
+
+
 

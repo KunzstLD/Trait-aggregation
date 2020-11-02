@@ -64,37 +64,81 @@ taxa_diff_meanComp <-
 xtable_wo_rownames(x = taxa_diff_meanComp, auto = TRUE)
 
 
-#### Direct aggregation (median) and weighted aggregation ####
-taxa_diff_dir_weighted <-
-  lapply(results_agg_dir_weighted, function(y) {
-    y[, .(deviance, total = .N)] %>%
-      .[deviance != 0, .(.N / total * 100,
-                         total)] %>%
-      .[!duplicated(total),]
-  }) %>%
+
+#### Median and weighted aggregation ####
+
+# merge results for mean and median
+results_weighted_comb <- mapply(
+  function(x, y)
+    merge(x, y, by = c("family", "variable", "order")),
+  results_agg_weighted_mean,
+  results_agg_weighted_median,
+  SIMPLIFY = FALSE
+)
+
+lapply(results_weighted_comb, function(y) {
+  y %>%
+    .[, value_weighted_agg.y := NULL] %>%
+    setnames(
+      .,
+      old = c("value_weighted_agg.x",
+              "deviance.x",
+              "deviance.y"),
+      new = c(
+        "value_weighted_agg",
+        "deviance_mean_weighted",
+        "deviance_median_weighted"
+      )
+    )
+})
+
+taxa_diff_weighted <- lapply(results_weighted_comb, function(y) {
+  y[, .(deviance_median_weighted, deviance_mean_weighted, total = .N)] %>%
+    .[deviance_median_weighted != 0 |
+        deviance_mean_weighted != 0, .(deviance_mean_weighted,
+                                       dev_cases_median_weighted = .N / total,
+                                       total)] %>%
+    .[deviance_mean_weighted != 0, .(
+      dev_cases_median_weighted,
+      dev_cases_mean_weighted = .N / total,
+      total
+    )]
+} %>%
+  .[!duplicated(total), ]) %>%
   rbindlist(., idcol = "file")
 
-setnames(taxa_diff_dir_weighted, 
+setnames(taxa_diff_weighted, 
          old = c("file", 
-                 "V1",
+                 "dev_cases_median_weighted",
+                 "dev_cases_mean_weighted",
                  "total"), 
          new = c("Database",
-                 "Deviating cases [%]",
+                 "Deviating cases median weighted [%]",
+                 "Deviating cases mean weighted [%]",
                  "Number of cases"))
-taxa_diff_dir_weighted[, `Deviating cases [%]` := round(`Deviating cases [%]`, digits = 2)]
-taxa_diff_dir_weighted$Database <- c("Australia", "Europe", "New Zealand", "North America")
+
+# calculate % deviances
+taxa_diff_weighted[, `:=`(
+  `Deviating cases median weighted [%]` = round(`Deviating cases median weighted [%]`*100,
+                                                digits = 2),
+  `Deviating cases mean weighted [%]` = round(`Deviating cases mean weighted [%]`*100,
+                                              digits = 2)
+)]
+taxa_diff_weighted$Database <- c("Australia", "Europe", "New Zealand", "North America")
 
 # row order (to be in accordance with other tables)
-taxa_diff_dir_weighted <-
-  taxa_diff_dir_weighted[match(c("Europe", "North America",
+taxa_diff_weighted <-
+  taxa_diff_weighted[match(c("Europe", "North America",
                              "Australia", "New Zealand"),
                            Database), ]
 
 # latex output
-xtable_wo_rownames(x = taxa_diff_dir_weighted, auto = TRUE)
-
+xtable_wo_rownames(x = taxa_diff_weighted, auto = TRUE)
 
 # _____________________________________________________________________________
+
+
+
 #### Range of deviance #### 
 # _____________________________________________________________________________
 look_up_db <- data.table(
@@ -117,6 +161,13 @@ Res_stepwise_dir <- rbindlist(results_agg,
 Res_stepwise_dir[look_up_db, 
                  `:=`(id = i.Database), 
                  on = c(id = "Key_col")]
+
+# check range and extreme cases
+range(Res_stepwise_dir$deviance)
+Res_stepwise_dir[deviance >= 0.5 | deviance <= -0.5, ]
+
+# Which traits?
+Res_stepwise_dir[deviance != 0, unique(variable)]
 
 # display how many families per order deviate with their 
 # aggregated trait values for the stepwise_agg_median
@@ -162,7 +213,7 @@ Res_stepwise_dir[deviance != 0, .(deviance, variable, order),
     axis.text.y = element_text(family = "Roboto Mono", size = 10)
   )
 ggplot2::ggsave(filename = file.path(data_out, "Deviances_stepwise_dir_overview.png"),
-                width = 21, 
+                width = 22, 
                 height = 12,
                 units = "cm")
 
@@ -182,6 +233,12 @@ Res_mean_comp <- rbindlist(results_agg_means,
 Res_mean_comp[look_up_db, 
                  `:=`(id = i.Database), 
                  on = c(id = "Key_col")]
+
+# highest deviances 
+Res_mean_comp[deviance >= 0.4 | deviance <= -0.4, ]
+
+# traits with deviancing affinities
+Res_mean_comp[deviance != 0, unique(variable)]
 
 # display how many families per order deviate with their 
 # aggregated trait values for the stepwise_agg_median
@@ -207,7 +264,6 @@ Res_mean_table <- tbl_summary(
 xtable_wo_rownames(Res_mean_table$table_body[, c("label", "stat_1", "stat_2",
                                                          "stat_3", "stat_4")])
 # plot
-Res_mean_comp[is.na(order), order := "Unknown"]
 Res_mean_comp[deviance != 0, .(deviance, variable, order),
               by = "id"] %>%
   ggplot(., aes(x = order, y = deviance)) +
@@ -227,7 +283,7 @@ Res_mean_comp[deviance != 0, .(deviance, variable, order),
     axis.text.y = element_text(family = "Roboto Mono", size = 10)
   )
 ggplot2::ggsave(filename = file.path(data_out, "Deviances_dir_median_mean_overview.png"),
-                width = 21,
+                width = 22,
                 height = 12,
                 units = "cm")
 
@@ -241,10 +297,7 @@ xtable_wo_rownames(Res_mean_comp[deviance <= -0.3 | deviance >= 0.3, ])
 Res_stepwise_dir[deviance != 0, unique(variable)]
 
 
-
-# _____________________________________________________________________________
 #### For which families did the aggregation methods yield different trait values? ###
-# _____________________________________________________________________________
 lapply(results_agg, function(y)
   y[deviance != 0, .(family, order)] %>%
     .[!duplicated(family),])
@@ -258,72 +311,97 @@ lapply(results_agg, function(y) y[deviance != 0, .(family, variable, order)] %>%
 # lapply(results_agg, function(y) y[deviance > 0, ])
 # lapply(results_agg, function(y) y[deviance < 0, ])
 
-# _____________________________________________________________________________
 
-#### Direct aggregation and weighted aggregation ####
-Res_dir_weighted <- rbindlist(results_agg_dir_weighted, 
-                              idcol = "id")
-Res_dir_weighted[look_up_db,
-                 `:=`(id = i.Database),
-                 on = c(id = "Key_col")]
+
+#### Direct Aggreation and weighted aggregation ####
+Res_weighted <- rbindlist(results_weighted_comb, 
+                           idcol = "id")
+Res_weighted[look_up_db, 
+              `:=`(id = i.Database), 
+              on = c(id = "Key_col")]
+
+# range of deviances 
+range(Res_weighted$deviance_median_weighted)
+Res_weighted[deviance_median_weighted >= 0.4 | deviance_median_weighted <= -0.4, ]
+
+range(Res_weighted$deviance_mean_weighted)
+Res_weighted[deviance_mean_weighted >= 0.4 | deviance_mean_weighted <= -0.4, ]
+
+# which traits deviate?
+# deviance_median_weighted != 0
+Res_weighted[deviance_mean_weighted != 0, unique(variable)]
+Res_weighted[deviance_median_weighted != 0, unique(variable)]
 
 # display how many families per order deviate with their 
-# aggregated trait values for the stepwise_agg_median
-# and the direct_agg_median
+# aggregated trait values for the direct_agg_median and weighted_agg
 # take abs of negative 
-Res_dir_weighted_summary <- Res_dir_weighted[deviance != 0, .(id = id,
-                                                              order = order,
-                                                              deviance,
-                                                              abs_deviance = abs(deviance))]
+Res_weighted_summary <-
+  Res_weighted[deviance_mean_weighted != 0, .(
+    id = id,
+    order = order,
+    deviance_mean_weighted,
+    abs_deviance = abs(deviance_mean_weighted)
+  )]
+
 # gtsummary table
-Res_dir_weighted_table <- tbl_summary(
-  data = Res_dir_weighted_summary,
+Res_weighted_table <- tbl_summary(
+  data = Res_weighted_summary,
   statistic = list(all_continuous() ~ "{mean} ({sd})"),
   by = "id",
-  label = list(deviance ~ "Mean dev.",
-               abs_deviance ~ "Abs. mean dev."),
-  digits = list(deviance ~ c(3, 2))
+  label = list(deviance_mean_weighted ~ "Mean deviance",
+               abs_deviance ~ "Mean abs. deviances"),
+  digits = list(deviance_mean_weighted ~ c(3, 2),
+                abs_deviance ~ c(3, 2))
 ) %>%
   italicize_levels() 
 
-# latex output
-xtable_wo_rownames(Res_dir_weighted_table$table_body[, c("label", "stat_1", "stat_2",
-                                                         "stat_3", "stat_4")])
+Res_weighted_summary[deviance_mean_weighted != 0 & id == "New Zealand", ]
 
-# Plot of the deviances 
-# TODO: change Order of databases
-Res_dir_weighted[deviance != 0, .(deviance, variable, order), 
-                 by = "id"] %>% 
-  ggplot(., aes(x = order, y = deviance))+
-  geom_point(size = 2)+
-  geom_boxplot(alpha = 0.7)+
+# latex output
+xtable_wo_rownames(Res_weighted_table$table_body[, c("label", "stat_1", "stat_2",
+                                                     "stat_3", "stat_4")])
+# plot
+Res_weighted[deviance_median_weighted != 0 | deviance_mean_weighted != 0, 
+             .(deviance_median_weighted, 
+               deviance_mean_weighted, 
+               variable,
+               order),
+             by = "id"] %>% 
+  melt(., 
+       measure.vars = c("deviance_median_weighted",
+                        "deviance_mean_weighted"),
+       variable.name = "deviances") %>%
+  .[!(id == "New Zealand" & deviances == "deviance_mean_weighted"), ] %>% 
+  ggplot(., aes(x = order, y = value)) +
+  geom_point(size = 1) +
+  geom_boxplot(alpha = 0.8, size = 0.9) +
   ylim(-1, 1) +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(x = "Order", 
-       y = "Deviance in affinity")+
-  coord_flip()+
-  facet_wrap(~id)+
+  labs(x = "Order",
+       y = "Deviance in affinity") +
+  coord_flip() +
+  facet_wrap( ~ id+deviances) +
   theme_light(base_size = 15) + #,base_family = "Poppins"
   theme(
-    legend.position = "none", 
+    legend.position = "none",
     axis.title = element_text(size = 12),
     axis.text.x = element_text(family = "Roboto Mono", size = 10),
     axis.text.y = element_text(family = "Roboto Mono", size = 10)
   )
-ggplot2::ggsave(filename = file.path(data_out, "Deviances_stepwise_dir_overview.png"),
-                width = 21, 
-                height = 12,
+ggplot2::ggsave(filename = file.path(data_out, "Deviances_dir_weighted_overview.png"),
+                width = 27,
+                height = 20,
                 units = "cm")
 
-# Res_stepwise_dir[deviance != 0 & id == "Australia", ]
-# High deviances? What is a high deviance actually?
-setcolorder(x = Res_dir_weighted, 
+# High deviances
+setcolorder(x = Res_weighted, 
             c("id", "variable", "order", "family")) 
-xtable_wo_rownames(Res_dir_weighted[deviance <= -0.3 | deviance >= 0.3, ])
+xtable_wo_rownames(Res_weighted[deviance <= -0.3 | deviance >= 0.3, ])
 
 # Just deviances for grouping features locomotion, 
 # respiration and feeding mode
-Res_dir_weighted[deviance != 0, unique(variable)]
+Res_stepwise_dir[deviance != 0, unique(variable)]
+
 
 
 # #### Are there families where trait values diverge that occur in several/all datasets? ####

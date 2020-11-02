@@ -25,118 +25,15 @@
 # Fix: Macropelopiini 1 in NZ Data
 
 
-#### Retrieve tax. hierarchy ####
-preproc_cp <- copy(preproc_dat)
-
-# tax. hierarchy for each and tax. resolution
-lapply(preproc_cp, function(y) retrieve_tax_hierarchy(x = y))
-
-# overview tax. hierarchy
-# most frequent case: few (1- ~5) genera
-# & few species
-# There are some extremes per DB, i.e. few families with
-# a lot of different genera and sometimes also many species
-# Trend: the more genera per family, more species
-# Use frequencies of how many genera per family to
-# explain differences (or lack thereof) in aggr. methods
-# -> many families with 1 genus -> no difference between
-# direct, weighted and stepwise
-overview_hierarchy <- lapply(preproc_cp, function(y) {
-  y[, .(
-    nr_unique_genus,
-    entry_on_species,
-    family
-  )] %>%
-    .[!is.na(nr_unique_genus), ] %>%
-    .[!duplicated(family), ]
-})
-
-# nr_unique_genus vs entry_on_species
-overview_hierarchy %>%
-  rbindlist(., idcol = "dataset") %>%
-  .[dataset == "Trait_freshecol_2020_pp_harmonized", ] %>%
-  .[nr_unique_genus <= 50, ] %>%
-  ggplot(., aes(x = nr_unique_genus, y = entry_on_species)) +
-  geom_point() +
-  facet_wrap(~dataset) +
-  theme_bw() +
-  theme(
-    legend.position = "none",
-    axis.title = element_text(size = 12),
-    axis.text.x = element_text(family = "Roboto Mono", size = 9),
-    axis.text.y = element_text(family = "Roboto Mono", size = 9)
-  )
-
-#
-lapply(overview_hierarchy, function(y) {
-  Hmisc::describe(y)
-})
-
-# derive frequency unique genus entries
-lapply(overview_hierarchy, function(y) {
-  Hmisc::describe(y) %>%
-    .[["nr_unique_genus"]] %>%
-    .[["values"]]
-}) %>%
-  rbindlist(., idcol = "dataset")
-
-# frequency species entries
-lapply(overview_hierarchy, function(y) {
-  Hmisc::describe(y) %>%
-    .[["entry_on_species"]] %>%
-    .[["values"]]
-}) %>%
-  rbindlist(., idcol = "dataset")
-
-# plot
-lapply(preproc_cp, function(y) {
-  y[, .(
-    nr_unique_genus,
-    entry_on_species,
-    family
-  )] %>%
-    .[!is.na(nr_unique_genus), ] %>% # don't regard entries on family-lvl
-    .[!duplicated(family), ]
-}) %>%
-  rbindlist(., idcol = "dataset") %>%
-  melt(., measure.vars = c(
-    "nr_unique_genus",
-    "entry_on_species"
-  )) %>%
-  ggplot(.) +
-  geom_violin(aes(x = as.factor(dataset), y = value)) +
-  facet_wrap(~variable) +
-  theme_bw() +
-  theme(
-    legend.position = "none",
-    axis.title = element_text(size = 12),
-    axis.text.x = element_text(family = "Roboto Mono", size = 9),
-    axis.text.y = element_text(family = "Roboto Mono", size = 9),
-  )
-
-# bind
-overview_bind <- overview_hierarchy %>%
-  rbindlist(., idcol = "dataset")
-
-
-
+# _______________________________________________________________________________________________
 #### Simulation ####
 
-# look at the real data:
-# test <- copy(preproc_cp$Trait_freshecol_2020_pp_harmonized)
-# # # nr. species per genus
-# test <- test[family == "Baetidae", .SD,
-#   .SDcols = names(test) %like% "^species|^genus|^family|^order|feed.*"
-# ]
-# test <- test[!is.nan(feed_shredder), ]
-
-## =====================================================
 # Pre-thoughts:
 # 25 values for a fixed sd are simulated in each run
 # 100 runs + 5 sds -> 500
 # 500*25 = 12500 rows!
 # 12500 * simulated datasets (3)
-## =====================================================
+# _______________________________________________________________________________________________
 set.seed(1234)
 
 # - simulate taxonomic data
@@ -154,7 +51,7 @@ sim_data <- list(
   # "Extreme" example:
   # One genus covering ~50 of the species listed in one family
   # rest equal
-  "sim_extrm" = data.table(
+  "sim_extreme" = data.table(
     order = "O1",
     family = "F1",
     genus = c(rep("G1", 13), rep(paste0("G", 2:5), each = 3)),
@@ -287,7 +184,6 @@ res_single_runs <- melt(
 )
 # take abs of differences
 res_single_runs[, abs_differences := abs(differences)]
-res_single_runs[abs_differences > 0.1, .(comparison, run_id, .N), by = simulation] %>% View
 
 
 #### Graphical analysis ####
@@ -303,27 +199,27 @@ res_base_sim[, method := factor(
 )]
 
 # - overview of aggregated trait values :
-label_names <- c("0.2" = "sd = 0.2",
-                 "0.4" = "sd = 0.4",
-                 "0.6" = "sd = 0.6",
-                 "0.8" = "sd = 0.8",
-                 "1" = "sd = 1.0")
 res_base_sim %>%
-  ggplot(., aes(x = as.factor(simulation), y = T1)) +
-  geom_boxplot(aes(fill = as.factor(method)), alpha = 0.5) +
-  scale_fill_uchicago()+
-  facet_wrap( ~ as.factor(sd), labeller = as_labeller(label_names)) +
-  labs(x = "Simulation type", 
-       y = "Trait affinitiy T1", 
-       fill = "Aggregation method")+
-  theme_bw() +
-  theme(
-    axis.title = element_text(size = 12),
-    axis.text.x = element_text(family = "Roboto Mono", size = 11),
-    axis.text.y = element_text(family = "Roboto Mono", size = 11),
-    legend.title = element_text(size = 12),
-    legend.text = element_text(family = "Roboto Mono", size = 11)
-  )
+  melt(., measure.vars = c("T1", "T2", "T3")) %>% 
+    ggplot(., aes(x = as.factor(sd), y = value)) +
+    geom_boxplot(aes(fill = as.factor(method)), alpha = 0.5) +
+    scale_fill_uchicago(labels = c("direct_agg \n (mean)", 
+                                   "stepwise_agg \n (mean)",
+                                   "weighted_agg",
+                                   "direct_agg \n (median)",
+                                   "stepwise_agg \n (median)")) + # labels = c("A", "B")
+    facet_grid(as.factor(variable) ~ as.factor(simulation)) +
+    labs(x = "Standard deviation",
+         y = "Trait affinitiy",
+         fill = "Aggregation method") +
+    theme_bw() +
+    theme(
+      axis.title = element_text(size = 12),
+      axis.text.x = element_text(family = "Roboto Mono", size = 11),
+      axis.text.y = element_text(family = "Roboto Mono", size = 11),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(family = "Roboto Mono", size = 11)
+    )
 for (link in c(data_out, data_paper)) {
   ggplot2::ggsave(
     filename = file.path(link, "Overview_sim_results.png"),
@@ -361,10 +257,8 @@ res_single_runs[, comparison := factor(
     "direct_mean_VS_weighted_agg"
   )
 )]
-
 single_run_diffs <- res_single_runs[abs_differences >= 0.1,
-                                  .(differences, abs_differences, .N),
-                                  by = .(comparison, simulation, sd)]
+                                    .(differences, abs_differences, comparison, simulation, sd)]
 single_run_diffs[, `:=`(
   max_abs_diff = max(abs_differences),
   min_abs_diff = min(abs_differences)
@@ -373,6 +267,12 @@ by = .(comparison,
        simulation,
        sd)]
 
+# label names
+label_names <- c("0.2" = "sd = 0.2",
+                 "0.4" = "sd = 0.4",
+                 "0.6" = "sd = 0.6",
+                 "0.8" = "sd = 0.8",
+                 "1" = "sd = 1")
 # plot
 ggplot() +
   geom_pointrange(
@@ -388,7 +288,7 @@ ggplot() +
     alpha = 0.7
   ) +
   labs(x = "Comparison", 
-       y = "Absolute differences", 
+       y = "Absolute differences in \n aggregated trait affinities", 
        color = "Simulation type")+
   scale_color_uchicago() +
   scale_x_discrete(
@@ -398,9 +298,8 @@ ggplot() +
                "Stepwise_agg (mean) - \n Weighted_agg",
                "Stepwise_agg (mean) - \n Stepwise_agg (median)",
                "Direct_agg (median) - \n Weighted_agg",
-               "Direct_agg (median) - \n Stepwise_mean"))+
-  facet_wrap( ~  as.factor(sd), 
-              labeller = as_labeller(label_names)) +
+               "Direct_agg (median) - \n Stepwise_agg (mean)"))+
+  facet_wrap( ~  as.factor(sd), labeller = as_labeller(label_names)) + 
   coord_flip() +
   theme_bw() +
   theme(
@@ -411,21 +310,17 @@ ggplot() +
     legend.title = element_text(size = 12),
     legend.text = element_text(family = "Roboto Mono", size = 11)
   )
+for (link in c(data_out, data_paper)) {
+  ggplot2::ggsave(
+    filename = file.path(link, "Diffs_indiv_runs_sim.png"),
+    width = 25,
+    height = 13,
+    units = "cm"
+  )
+}
 
-# Number of deviating cases
-# Include simulation types!
-ggplot(single_run_diffs, aes(x = comparison, y = N)) + 
-  geom_point(aes(color = as.factor(simulation)), 
-             position = position_dodge(width = 0.8))+
-#  facet_wrap(~ as.factor(sd))+
-  coord_flip()
-
-single_run_diffs[comparison == "stepwise_median_VS_weighted_agg" & sd == 0.4, ]
-
-  # labs(title="Ordered Bar Chart", 
-  #      subtitle="Make Vs Avg. Mileage", 
-  #      caption="source: mpg") + 
-  # theme(axis.text.x = element_text(angle=65, vjust=0.6))
+# Number of deviating comparisons for result section
+# single_run_diffs[, .(comparison, simulation, sd, N)] %>% View
 
 
 

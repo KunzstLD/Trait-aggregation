@@ -77,5 +77,11 @@ trait_dat$Trait_AUS_harmonized.rds[family == "Oribatidae",
 trait_dat$Trait_AUS_harmonized.rds[family == "Didymorchidae",
                                    order := "Platyhelminthes"]
 
-# CHECK
-print(lapply(trait_dat, function(y) y[is.na(order), unique(family)]))
+# CHECK for is.na in orders
+message(
+  "Have all taxa information on order-level? ",
+  lapply(lapply(trait_dat, function(y)
+    y[is.na(order), unique(family)]),
+    function(y)
+      identical(character(0), y))
+)

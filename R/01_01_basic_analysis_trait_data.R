@@ -42,7 +42,7 @@ setnames(completeness,
 look_up_db <- data.table(
   Key_col = c(
     "Trait_AUS_harmonized.rds",
-    "Trait_EU_pp_harmonized.rds",
+    "Trait_freshecol_2020_pp_harmonized.rds",
     "Trait_NZ_pp_harmonized.rds",
     "Traits_US_LauraT_pp_harmonized.rds"
   ),
@@ -94,7 +94,6 @@ completeness_output <- dcast(data = completeness,
                       value.var = "Trait covered [%]") %>%
   .[match(target, Database),]
 
-
 # change col order 
 setcolorder(
   completeness_output,
@@ -111,12 +110,14 @@ setcolorder(
 )
 
 # latex output
-xtable_wo_rownames(x = completeness_output,
-                   caption = "Table shows [%] of entries that have 
-                   information for the individual grouping features
-                   per trait databases",
-                   label = "tab:trait_coverage",
-                   digits = 0)
+xtable_wo_rownames(
+  x = completeness_output,
+  caption = "Percentage of entries that have
+        information for the individual grouping features
+        shown per trait dataset",
+  label = "tab:trait_coverage",
+  digits = 0
+)
 
 
 # _________________________________________________________________________
@@ -153,13 +154,12 @@ orders_aq_ins <- c(
   "Megaloptera",
   "Neuroptera"
 )
-
 AqIns <- lapply(trait_dat, function(y)
   y[order %in% orders_aq_ins, .N]) %>% 
   lapply(. , as.data.table) %>% 
   rbindlist(.,
             idcol = "id")
-setnames(AqIns, "V1", "nr_aq_taxa")
+setnames(AqIns, "V1", "nr_aq_insects")
 
 # combine 
 TaxCoverage <- Reduce(merge, list(TaxaPool, 
@@ -167,12 +167,12 @@ TaxCoverage <- Reduce(merge, list(TaxaPool,
                    AqIns))
 
 # calculate relative frequencies
-cols <- c("species", "genus", "family", "nr_aq_taxa")
+cols <- c("species", "genus", "family", "nr_aq_insects")
 TaxCoverage[, c("species_rf",
                 "genus_rf",
                 "family_rf",
-                "aq_taxa_rf") := lapply(.SD, function(y)
-                  round(y / V1 * 100, digits = 2)),
+                "aq_insects_rf") := lapply(.SD, function(y)
+                  round(y / V1 * 100, digits = 0)),
             .SDcols = cols]
 
 # create char vectors by pasting together results
@@ -180,7 +180,7 @@ TaxCoverage[, `:=`(
   species = paste0(species, " (", species_rf, ")"),
   genus = paste0(genus, " (", genus_rf, ")"),
   family = paste0(family, " (", family_rf, ")"),
-  nr_aq_taxa = paste0(nr_aq_taxa, " (", aq_taxa_rf, ")")
+  nr_aq_insects = paste0(nr_aq_insects, " (", aq_insects_rf, ")")
 )]
 
 # change colnames
@@ -190,13 +190,13 @@ setnames(TaxCoverage,
                  "species", 
                  "genus",
                  "family",
-                 "nr_aq_taxa"),
+                 "nr_aq_insects"),
          new = c("Database", 
                  "Nr. of taxa",
                  "Species",
                  "Genus",
                  "Family",
-                 "Nr. aquatic taxa"))
+                 "Nr. aquatic insects"))
 
 # change database names
 TaxCoverage[look_up_db,
@@ -214,126 +214,10 @@ TaxCoverage <- TaxCoverage[match(c("Europe",
 TaxCoverage[, c("species_rf", 
                 "genus_rf",
                 "family_rf",
-                "aq_taxa_rf") := NULL]
+                "aq_insects_rf") := NULL]
 
 # latex output 
 xtable_wo_rownames(x = TaxCoverage,
                    caption = "",
                    label = "tab:tax_coverage",
-                   digits = 2)
-
-# TODO: Following code maybe not needed, think about it
-#________________________________________________________________________
-#### Ratio initial nr of families and after selecting only compl TP ####
-# How many families end up in the final
-# preprocessed trait datasets compared to the initial
-# trait datasets?
-# This gives us insight how much and how consistent
-# information is covered in these trait databases
-# Notice: trait information gets not lost during aggregation
-# TODO: identify difference between NOA_fc & NOA_bin
-# -> Why Neuroptera in NOA_fc but not in NOA_bin?
-
-#________________________________________________________________________
-
-# # families per order initial data
-# cov_init <- lapply(trait_dat, function(y) {
-#   y[!duplicated(family), .(family, .N),
-#     by = order]
-# })
-# 
-# # family per order preproc data
-# cov_preproc <- lapply(preproc_dat, function(y) {
-#   y[!duplicated(family), .(family, .N),by = order]
-# })
-# 
-# # Nr of orders per DB init
-# lapply(cov_init, function(y){
-#   y[!is.na(order), .N, by = "order"] %>% nrow()
-# })
-# 
-# # Nr of orders per DB preproc
-# lapply(cov_preproc, function(y){
-#   y[!is.na(order), .N, by = "order"] %>% nrow()
-# })
-# 
-# # orders not included
-# # NZ:
-# order_vec <- unique(cov_preproc$Trait_NZ_pp_harmonized$order)
-# cov_init$Trait_NZ_pp_harmonized.rds[!order %in% order_vec, ]
-# 
-# # AUS:
-# order_vec <- unique(cov_preproc$Trait_AUS_harmonized$order)
-# cov_init$Trait_AUS_harmonized.rds[!order %in% order_vec, unique(order)]
-# 
-# 
-# # families not covered in preproc. dataset?
-# # mapply(function(x,y) x[!family %in% y$family, ],
-# #        cov_init,
-# #        cov_preproc,
-# #        SIMPLIFY = FALSE)
-# 
-# # bind init & preproc together 
-# cov_res <-
-#   mapply(function(x, y)
-#     merge(x, y, by = c("family", "order")),
-#     cov_init,
-#     cov_preproc,
-#     SIMPLIFY = FALSE)
-# 
-# #  change col names
-# cov_res <- lapply(cov_res, function(y)
-#   setnames(
-#     y,
-#     old = c("N.x", "N.y"),
-#     new = c("N_init", "N_preproc")
-#   ))
-# 
-# # calculate % preproc/initial
-# cov_res <- lapply(cov_res, function(y) {
-#   y[, coverage := ((N_preproc / N_init) * 100)]
-# })
-# # lapply(cov_res, function(y){
-# #   y[order(order), ]
-# # })
-# 
-# output_tbl <- lapply(cov_res, function(y)
-#   y[!duplicated(order), ]) %>%
-#   rbindlist(., idcol = "file") %>%
-#   .[!is.na(order) , .(order, coverage = round(coverage, digits = 2), file)] %>%
-#   dcast(., order ~ file, value.var = "coverage")  
-# 
-# setnames(
-#   output_tbl,
-#   old = c(
-#     "order",
-#     "Trait_AUS_harmonized.rds",
-#     "Trait_EU_pp_harmonized.rds",
-#     "Trait_NZ_pp_harmonized.rds",
-#     "Traits_US_LauraT_pp_harmonized.rds",
-#     "Traits_US_LauraT_pp_harmonized_fc.rds"
-#   ),
-#   new = c("Order",
-#           "Australia",
-#           "Europe",
-#           "New Zealand", 
-#           "North America",
-#           "North America fuzzy coded")
-# )
-# 
-# # latex output
-# # for now, exclude NOA_fc 
-# print(
-#   xtable(
-#     output_tbl[, .(Order, 
-#                    Australia,
-#                    `New Zealand`,
-#                    Europe,
-#                    `North America`)],
-#     caption = "Proportion of families per order that remain
-#     after only complete trait profiles have been selected from the total
-#     number of all families in the databases.",
-#     auto = TRUE
-#   ),
-#   include.rownames = FALSE
-# )
+                   digits = 0)
