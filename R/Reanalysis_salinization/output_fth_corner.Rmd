@@ -1,0 +1,116 @@
+---
+title: "4th corner output"
+output: html_document
+# knit: (function(inputFile, encoding) {
+#   rmarkdown::render(inputFile, encoding = encoding, output_dir = "/home/kunzst/Dokumente/Projects/Trait_DB/Trait-aggregation/Output/") })
+params: 
+  file: fc_salinity_all_traits_reduced
+---
+
+```{r, echo = FALSE}
+
+# relevant libraries
+library(reactable)
+library(htmltools)
+
+# set parameter to pick the right dataset
+file <- params$file
+res_fc <- readRDS(
+  file.path(
+    "/home/kunzst/Dokumente/Projects/Trait_DB/Trait-aggregation/Cache/Re-analysis_cache",
+    paste0(file, ".rds")
+  )
+)
+
+smry <- list()
+for(i in names(res_fc)){
+  outp <- res_fc[[i]]
+  smry[[i]] <- data.frame(
+    "Test" = outp$tabD2$names,
+    "Obs" = round(outp$tabD2$obs, digits = 3),
+    "Std.Obs" = round(outp$tabD2$expvar[, 1], digits = 3),
+    "Alter" = outp$tabD2$alter,
+    "Pvalue" = outp$tabD2$pvalue,
+    "Pvalue.adj" = outp$tabD2$adj.pvalue
+  )
+}
+```
+
+### Fourth corner results with traits from Szöcs et al. 2014 study
+
+```{r, echo = FALSE}
+reactable(smry[["original"]],
+            filterable = TRUE,
+            highlight = TRUE)
+
+```
+
+### Fourth corner results harmonised but not aggregated traits
+
+```{r, echo = FALSE}
+reactable(smry[["not_aggregated"]],
+            filterable = TRUE,
+            highlight = TRUE)
+
+```
+
+### Fourth corner results with aggregated traits (stepw_median)
+
+```{r, echo = FALSE}
+reactable(smry[["stepw_median"]],
+            filterable = TRUE,
+            highlight = TRUE)
+
+```
+
+### Fourth corner results with aggregated traits (stepw_mean)
+
+```{r, echo = FALSE}
+reactable(smry[["stepw_mean"]],
+            filterable = TRUE,
+            highlight = TRUE)
+
+```
+
+### Fourth corner results with aggregated traits (direct_median)
+
+```{r, echo = FALSE}
+reactable(smry[["direct_median"]],
+            filterable = TRUE,
+            highlight = TRUE)
+
+```
+
+### Fourth corner results with aggregated traits (direct_mean)
+
+```{r, echo = FALSE}
+reactable(smry[["direct_mean"]],
+            filterable = TRUE,
+            highlight = TRUE)
+
+```
+
+### Fourth corner results with aggregated traits (weighted)
+
+```{r, echo = FALSE}
+reactable(smry[["weighted"]],
+            filterable = TRUE,
+            highlight = TRUE)
+
+```
+
+### Look-up table traits in Szöcs et al. 2014
+
+```{r, echo = FALSE}
+trait_edi_lookup <-
+  fread(
+    "/home/kunzst/Dokumente/Projects/Trait_DB/Trait-aggregation/Data/Edi_salinity_study/data/trait_lookup.csv",
+    sep = ";"
+  )
+trait_edi_lookup[, ID_trait := paste0("X", ID_trait)]
+
+reactable(trait_edi_lookup,
+          filterable = TRUE,
+          highlight = TRUE)
+```
+

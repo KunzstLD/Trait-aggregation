@@ -181,56 +181,6 @@ Mode <- function(x, na.rm = FALSE) {
   ux[which.max(tabulate(match(x, ux)))]
 }
 
-# aggregation function used 
-# in spec_genus_agg
-# agg_fun_mean <- function(y, na.rm = FALSE) {
-#   # just one value return that value
-#   if (length(y) == 1)
-#     y
-#   # mode for cases with duplicates for one value, like:
-#   # c(1,1,1,3,0)
-#   else if (length(names(table(y)[table(y) > 1])) == 1)
-#     Mode(y, na.rm = na.rm)
-#   # median for cases with multiple duplicates of the same length
-#   else if (length(names(table(y)[table(y) > 1])) > 1 &
-#            length(names(table(y)[table(y) == 1])) == 0)
-#     mean(y, na.rm = na.rm)
-#   # mean for cases with multiple duplicates
-#   # and distinct values, like
-#   # c(1,1,2,2,3)
-#   else if (length(names(table(y)[table(y) > 1])) > 1 &
-#            length(names(table(y)[table(y) == 1])) > 0)
-#     mean(y, na.rm = na.rm)
-#   # for distinct values 
-#   else if (length(y) == length(unique(y)))
-#     mean(y, na.rm = na.rm)
-# }
-
-# slightly altered in comparison to agg_fun
-# uses median instead of mean
-# agg_fun_median <- function(y, na.rm = FALSE) {
-#   # just one value return that value
-#   if (length(y) == 1)
-#     y
-#   # mode for cases with duplicates for one value, like:
-#   # c(1,1,1,3,0)
-#   else if (length(names(table(y)[table(y) > 1])) == 1)
-#     Mode(y, na.rm = na.rm)
-#   # median for cases with multiple duplicates of the same length
-#   else if (length(names(table(y)[table(y) > 1])) > 1 &
-#            length(names(table(y)[table(y) == 1])) == 0)
-#     median(y, na.rm = na.rm)
-#   # median for cases with multiple duplicates
-#   # and distinct values, like
-#   # c(1,1,2,2,3)
-#   else if (length(names(table(y)[table(y) > 1])) > 1 &
-#            length(names(table(y)[table(y) == 1])) > 0)
-#     median(y, na.rm = na.rm)
-#   # median for distinct values 
-#   else if (length(y) == length(unique(y)))
-#     median(y, na.rm = na.rm)
-# }
-
 # Stepwise aggregation to family-level by allocating species entries
 # to genus level using the median, then aggregating to family-level
 # using a method decided by the user as well.
@@ -430,6 +380,45 @@ dist_to_axis <- function(x) {
   )  #qchisq(0.975, df = 1)
 }
 
+# Extracting fourth corner output and saving as a .csv
+# Additional name argument can be used to change the 
+# name of the output file (i.e. appending "_name")
+fcorner_output <- function(x,
+                           name = NULL) {
+  lapply(names(x), function(y) {
+    outp <- x[[y]]
+    smry <- data.frame(
+      "Test" = outp$tabD2$names,
+      "Obs" = outp$tabD2$obs,
+      "Std.Obs" = outp$tabD2$expvar[, 1],
+      "Alter" = outp$tabD2$alter,
+      "Pvalue" = outp$tabD2$pvalue,
+      "Pvalue.adj" = outp$tabD2$adj.pvalue
+    )
+    write.csv(smry,
+              file.path(data_out, paste0("4th_corner_", y, "_", name, ".csv")),
+              row.names = FALSE)
+  })
+}
+
+# Another similar helper function for generating a list with the fourth corner results
+# in R
+extract_fc_results <- function(x) {
+  fc_tbl <- list()
+  for (i in names(x)) {
+    outp <- x[[i]]
+    fc_tbl[[i]] <- data.frame(
+      "Test" = outp$tabD2$names,
+      "Obs" = round(outp$tabD2$obs, digits = 3),
+      "Std.Obs" = round(outp$tabD2$expvar[, 1], digits = 3),
+      "Alter" = outp$tabD2$alter,
+      "Pvalue" = outp$tabD2$pvalue,
+      "Pvalue.adj" = outp$tabD2$adj.pvalue
+    )
+  }
+  fc_tbl
+}
+
 # ___________________________________________________________________
 #### Taxonomic hierarchy ####
 # ___________________________________________________________________
@@ -497,11 +486,245 @@ sim_trait_vals <- function(n_traits = 3,
 # x / sum(x)
 # x
 
+# ___________________________________________________________________
+#### FD Analysis ####
+# ___________________________________________________________________
+
+# Used to calculate lm's for various FD indices
+# between original and aggregated datasets 
+lm_fd <- function(dt, x, y) {
+  mod <- lm(y ~ x, data = dt)
+  list(
+    "r2" = summary(mod)$r.squared,
+    "coef" = coef(mod)[2], # slope
+    "p_value" = summary(mod)$coefficients[, "Pr(>|t|)"][2] # p-value slope
+  )
+}
+
+# ___________________________________________________________________
+#### Plotting helper functions ####
+# ___________________________________________________________________
+
+# boxplot for comparison of species scores
+# OLD: not used anymore
+SpecScores_bp_fun <- function(site_scores,
+                              xlab = "Position",
+                              ylab = "Scores on constrained axis",
+                              col = colvec,
+                              main = main,
+                              side = 4,
+                              species_scores,
+                              species_scores_extreme,
+                              labels = labels) {
+  boxplot(
+    site_scores ~ class,
+    ylab = ylab,
+    xlab = xlab,
+    col = col,
+    main = main
+  )
+  abline(h = 0, lty = "dotted")
+  rug(species_scores, side = 4)
+  linestack(
+    species_scores_extreme,
+    labels = labels,
+    at = par("usr")[2],
+    add = TRUE,
+    hoff = 1,
+    cex = 0.9
+  )
+}
+
+# ggplot version of the above, run's much smoother!
+fun_bxp_tcomp <- function(site_scr,
+                          species_scr,
+                          title) {
+  ggplot(site_scr) +
+    geom_boxplot(aes(
+      x = as.factor(class),
+      y = RDA_site_scores,
+      fill = as.factor(class)
+    )) +
+    ggtitle(title) +
+    scale_y_continuous(sec.axis = sec_axis(~ . * 1,
+                                           breaks = species_scr,
+                                           labels = NULL)) +
+    scale_fill_manual(values = c("forestgreen", "steelblue", "red")) +
+    labs(x = "Position", y = "Scores on constrained axis") +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      axis.title = element_text(size = 12),
+      axis.text.x = element_text(family = "Roboto Mono", size = 11),
+      axis.text.y = element_text(family = "Roboto Mono", size = 11),
+      panel.grid = element_blank(),
+      plot.margin = margin(5.5, 0, 5.5, 5.5, "pt")
+    )
+}
+
+fun_axis <- function(data_axis,
+                     trait,
+                     nudge_x = 0.25,
+                     limits_y) {
+  ggplot(
+    data.frame(y = data_axis,
+               trait = trait),
+    aes(x = 0, y = y, label = trait)
+  ) +
+    geom_text_repel(
+      min.segment.length = grid::unit(0, "pt"),
+      color = "grey30",
+      size = 4,
+      family = "Roboto Mono",
+      nudge_x = nudge_x
+    ) +
+    scale_x_continuous(
+      limits = c(0, 1),
+      expand = c(0, 0),
+      breaks = NULL,
+      labels = NULL,
+      name = NULL
+    ) +
+    scale_y_continuous(
+      limits = range(limits_y),
+      breaks = NULL,
+      labels = NULL,
+      name = NULL
+    ) +
+    theme(panel.background = element_blank(),
+          plot.margin = margin(0, 0, 0, 0, "pt"))
+}
+
+# plot taxonomic hierarchy
+tax_hierarchy_plot <- function(plotting_data,
+                               label_unique_genera = 7,
+                               y_lim_max = 110,
+                               annotate_region = NULL,
+                               perc_genera) {
+  plotting_data %>%
+    ggplot(.) +
+    geom_point(aes(x = 1,
+                   y = nr_unique_genus),
+               size = 1.1,
+               color = "black") +
+    geom_point(aes(x = 2,
+                   y = entry_on_species),
+               size = 1.1,
+               color = "black") +
+    geom_segment(
+      aes(
+        x = 1,
+        xend = 2,
+        y = nr_unique_genus,
+        yend = entry_on_species
+      ),
+      size = .5,
+      color = "black",
+      alpha = .5
+    ) +
+    geom_text_repel(
+      data = ~ .x[nr_unique_genus > label_unique_genera, ],
+      mapping = aes(
+        x = 1,
+        y = nr_unique_genus,
+        label = as.factor(family)
+      ),
+      hjust = 1.2,
+      size = 3,
+      nudge_x = -0.02,
+      direction = "y",
+      segment.size  = 0.1,
+      segment.color = "gray20"
+    ) +
+    geom_vline(xintercept = 1,
+               linetype = "dashed",
+               size = .1) +
+    geom_vline(xintercept = 2,
+               linetype = "dashed",
+               size = .1) +
+    annotate(
+      "rect",
+      xmin = 1,
+      xmax = 2,
+      ymin = 0,
+      ymax = 5,
+      alpha = .2,
+      color = "steelblue",
+      size = 1.1
+    ) +
+    annotate(
+      "text",
+      x = 2.25,
+      y = 2.5,
+      family = "Poppins",
+      size = 2.8,
+      color = "gray20",
+      label = paste(perc_genera, "% of families have \n 5 or less genera.")
+    ) +
+    annotate(
+      "text",
+      label = paste("Genera per family \n", annotate_region),
+      x = 0.75,
+      y = y_lim_max,
+      size = 4,
+      family = "Poppins"
+    ) +
+    annotate(
+      "text",
+      label = paste("Species per genus \n", annotate_region),
+      x = 2.25,
+      y = y_lim_max,
+      size = 4,
+      family = "Poppins"
+    ) +
+    xlim(0.5, 2.5) +
+    ylim(0, y_lim_max) +
+    labs(x = "", y = "Number of taxa") +
+    theme_classic() +
+    theme(
+      axis.ticks = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_text(family = "Roboto Mono", size = 11)
+    )
+}
 
 
-
-
-
+# Plot LM of FD metrics
+# TODO Facet is hard coded, needs to be changed
+lm_plot <- function(dt, 
+                    x_var, 
+                    y_var, 
+                    dt_text, 
+                    label = dataset_names,
+                    xlab, 
+                    ylab) {
+  x_var <- enquo(x_var) # create quoted expressions
+  y_var <- enquo(y_var) # create quoted expressions
+  #  facet <- enquo(dataset)
+  ggplot(dt, aes(x = !! x_var,
+                 y = !! y_var)) +
+    geom_point() +
+    geom_smooth(method = "lm") +
+    geom_text(data = dt_text,
+              aes(
+                x = x,
+                y = y,
+                label = paste0("R² = ", r2)
+              )) +
+    facet_wrap( ~ as.factor(dataset),
+                labeller = as_labeller(label)) +
+    labs(x = xlab,
+         y = ylab) +
+    theme_bw() +
+    theme(
+      axis.title = element_text(size = 12),
+      axis.text.x = element_text(family = "Roboto Mono", size = 11),
+      axis.text.y = element_text(family = "Roboto Mono", size = 11),
+      strip.text.x = element_text(size = 12),
+      panel.grid = element_blank(),
+      plot.margin = margin(5.5, 0, 5.5, 5.5, "pt")
+    )
+}
 
 
 

@@ -30,7 +30,7 @@ anova(cwmRDA_new, strata = ecor_R$year, step = 1000)
 # 2D plot
 class <- factor(ecor_R$salinisati)
 scl = 3
-colvec <- c("red", "orange", "green")
+colvec <- c("forestgreen", "steelblue", "red")
 plot(cwmRDA_new, display = "sites", type = "none")
 points(
   cwmRDA_new,

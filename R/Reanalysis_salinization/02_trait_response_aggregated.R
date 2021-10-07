@@ -1,89 +1,190 @@
-# ________________________________________________________________________
+# _________________________________________________________________________________________________
 # aggregate everything on family level using different aggregation methods
 # combine with ecor_L:
 # - Maybe the best way would be to leave the taxa names as they are
 # - Just assign aggregated information
 # - Then calculate RDA scores (site and species)
 # - Find a good way to represent this graphically
-# ________________________________________________________________________
+# _________________________________________________________________________________________________
 
-# load data
-agg_data <- readRDS(file = "./Data/Re-analysis_cache/agg_data.rds")
+# _________________________________________________________________________________________________
+#### load data ####
+# _________________________________________________________________________________________________
 
+# aggregated trait datasets
+agg_data <- readRDS(file = "./Cache/Re-analysis_cache/agg_data.rds")
 
-# calculate rda ----
-# TODO: needs to load data from 01_data_processing
+# original matrices (species, CWM traits, site and env. variables, taxonomy)
+# ecor_data <- load_data(path = "./Data/Edi_salinity_study/cache",
+#                       pattern = "*.rds")
+ecor_data <-
+  load_data(path = "./Cache/Re-analysis_cache/",
+            pattern = "corr*.rds")
+
+# multiple assignment
+c(ecor_L, ecor_Q, ecor_R, ordos) %<-% ecor_data[c("ecor_L_corr.rds",
+                                                  "ecor_Q_corr.rds",
+                                                  "ecor_R_corr.rds",
+                                                  "ordos_corr.rds")]
+
+# trait table 
+trait_edi_lookup <-
+  fread(file.path("./Data/Edi_salinity_study/data/trait_lookup.csv"),
+        sep = ";")
+trait_edi_lookup[, ID_trait := paste0("X", ID_trait)]
+
+# extend lookup table with harmonized traits
+trait_ext_lookup <- rbind(trait_edi_lookup,
+                          data.table(
+                            ID = rep(c(22, 23, 24, 25, 26, 27),
+                                     c(6, 4, 3, 3, 3, 3)),
+                            ID_name = c(
+                              "herbivore piercer/shredder & scraper (grazer)",
+                              "collector gatherer (gatherers, detritivores)",
+                              "predator (engulfers & pierce prey tissues)",
+                              "shredder \n (chewers, \n miners, xylophagus, \n decomposing plants)",
+                              "collector filterer (active filterers, passive filterers, absorbers)",
+                              "parasite",
+                              "swimmer, scater (active & passive)",
+                              "burrower",
+                              "crawlers, walkers & sprawlers",
+                              "sessil (attached)",
+                              "cutaneous/tegument",
+                              "gills",
+                              "plastron & spiracle",
+                              "semivoltine",
+                              "univoltine",
+                              "bi- or multivoltine",
+                              "terrestric eggs",
+                              "aquatic eggs",
+                              "ovoviviparity",
+                              "size_small: size < 10 mm",
+                              "size_medium: 10 mm <= size > 20 mm",
+                              "size_large: EU: size >= 20 mm"
+                            ),
+                            ID_trait = c(
+                              "feed_herbivore",
+                              "feed_gatherer",
+                              "feed_predator",
+                              "feed_shredder",
+                              "feed_filter",
+                              "feed_parasite",
+                              "locom_swim",
+                              "locom_burrow",
+                              "locom_crawl",
+                              "locom_sessil",
+                              "resp_teg",
+                              "resp_gil",
+                              "resp_pls_spi",
+                              "volt_semi",
+                              "volt_uni",
+                              "volt_bi_multi",
+                              "ovip_ter",
+                              "ovip_aqu",
+                              "ovip_ovo",
+                              "size_large",
+                              "size_medium",
+                              "size_small"
+                            ),
+                            ID_trait_name = rep(
+                              c(
+                                "Feeding Mode",
+                                "Locomotion",
+                                "Respiration",
+                                "Voltinism",
+                                "Reproduction",
+                                "Body Size"
+                              ),
+                              c(6, 4, 3, 3, 3, 3)
+                            )
+                          ))
+
+# _________________________________________________________________________________________________
+#### calculate RDA ####
+# _________________________________________________________________________________________________
 trait_dat <- lapply(agg_data, function(y) weighted.rda(trait.data = y))
 
 # explained variance
 lapply(trait_dat, function(y) explained.var(y[[1]])) %>%
   rbindlist(., idcol = "id")
 
+# summary
+lapply(trait_dat, function(y) summary(y$cwmRDA))[[2]]
+
 # site and species scores (only RDA axis)
-trait_dat_species_scores <- lapply(trait_dat, function(y) extract.species.scores(y[[1]])) %>%
+species_scores <- lapply(trait_dat, function(y) extract.species.scores(y[[1]])) %>%
   rbindlist(., idcol = "id")
 
-
 # merge traits
-trait_dat_species_scores <- merge(trait_dat_species_scores,
+species_scores <- merge(species_scores,
   trait_ext_lookup,
   by.x = "traits",
   by.y = "ID_trait"
 )
 
-trait_dat_site_scores <- lapply(trait_dat, function(y) {
+site_scores <- lapply(trait_dat, function(y) {
   extract.site.scores(y[[1]])
 }) %>%
   rbindlist(., idcol = "id")
 
 # species scores to indicate which traits shape
 # different parts of the stream
-trait_dat_species_scores[, id := factor(
+species_scores[, id := factor(
   id,
   levels = c(
     "weighted",
-    "direct_mean",
-    "direct_median",
     "stepw_mean",
     "stepw_median",
+    "direct_mean",
+    "direct_median",
     "not_aggregated",
     "original"
   )
 )]
 
-# Results suggest that harmonization changed slightly the result
-# aggregation methdos seem not to change anything from the harmonized
-# version
-trait_dat_species_scores[, maha_dist := dist_to_axis(x = RDA_species_scores), by = "id"]
+# Multiply scores from original with -1 for comparability reasons
+species_scores[id == "original", RDA_species_scores := RDA_species_scores*(-1)]
+site_scores[id == "original", RDA_site_scores := RDA_site_scores*(-1)]
 
-# traits responding to high salinity
-trait_high_sal <- trait_dat_species_scores[maha_dist > qchisq(0.975, df = 1), ] %>%
+# Results suggest that harmonization changed slightly the result
+# aggregation methods seem not to change anything from the harmonized version
+
+# Mahalanoblis distance 
+species_scores[, maha_dist := dist_to_axis(x = RDA_species_scores), by = "id"]
+
+# traits responding to either extreme high or low salinity
+results_high_low_sal <- species_scores[maha_dist > qchisq(0.975, df = 1), ] %>%
   .[order(id), ]
-trait_dat_species_scores[, median(RDA_species_scores),
+species_scores[, median(RDA_species_scores),
                          by = "id"
 ]
 
-
+# _________________________________________________________________________________________________
 #### Plot species scores ####
-ggplot(
-  trait_dat_species_scores,
-  aes(x = as.factor(id), y = RDA_species_scores)
-) +
-  geom_boxplot() +
-  # geom_jitter(size = 1.5,
-  #             width = 0.05,
-  #             alpha = 0.6,
-  #             col = "darkgray")+
+# _________________________________________________________________________________________________
+ggplot(species_scores,
+       aes(x = id, y = RDA_species_scores*(-1))) +
+  geom_violin(color = "gray45", 
+              draw_quantiles = 0.5,
+              linetype = "solid",
+              size = 0.8) +
+  geom_jitter(
+    size = 2,
+    width = 0.05,
+    alpha = 0.3,
+    col = "black"
+  ) +
+  ylim(c(-0.6, 0.55)) +
   coord_flip() +
-  labs(x = NULL, y = "RDA species scores") +
+  labs(y = "RDA species scores") +
   scale_x_discrete(
     labels = c(
       "Weighted_agg",
-      "Direct_agg \n (mean)",
-      "Direct_agg \n (median)",
       "Stepwise_agg \n (mean)",
       "Stepwise_agg \n (median)",
-      "Harmonized; \n not aggregated",
+      "Direct_agg \n (mean)",
+      "Direct_agg \n (median)",
+      "Harmonised; \n not aggregated",
       "Original"
     )
   ) +
@@ -103,62 +204,159 @@ for (path in c(data_out, data_paper)) {
     units = "cm"
   )
 }
+# For graphical display of species and site scores
+# use script: 03_plots_species_scores_comp.R
+
+# _________________________________________________________________________________________________
+#### Post-analysis aggregated traits and species scores ####
+# _________________________________________________________________________________________________
+agg_data_post <- rbindlist(agg_data, idcol = "dataset", fill = TRUE)
+ 
+## feeding mode shredder/X11.3
+ggplot(agg_data_post)+
+  geom_violin(data = ~ .x[dataset != "original", ],
+               mapping = aes(x = as.factor(dataset), y = feed_shredder))+
+  geom_violin(data = ~ .x[dataset == "original", ],
+              mapping = aes(x = as.factor(dataset), y = X11.3))+
+  geom_jitter(data = ~ .x[dataset != "original", ],
+              mapping = aes(x = as.factor(dataset), y = feed_shredder),
+              width = 0.15)+
+  geom_jitter(data = ~ .x[dataset == "original", ],
+              mapping = aes(x = as.factor(dataset), y = X11.3),
+              width = 0.15)
+agg_data_post[, .(mean_shredder = mean(X11.3),
+                  median_shredder = median(X11.3),
+                  sd_shredder = sd(X11.3)),
+              by = "dataset"]
+agg_data_post[, .(mean(feed_shredder),
+                  median(feed_shredder),
+                  sd(feed_shredder)),
+              by = "dataset"]
+
+species_scores[traits == "feed_shredder" | traits == "X11.3", ]
+
+## Respiration gills
+ggplot(agg_data_post)+
+  geom_violin(data = ~ .x[dataset != "original", ],
+               mapping = aes(x = as.factor(dataset), y = resp_gil))+
+  geom_violin(data = ~ .x[dataset == "original", ],
+               mapping = aes(x = as.factor(dataset), y = X8.2))+
+  geom_jitter(data = ~ .x[dataset != "original", ],
+              mapping = aes(x = as.factor(dataset), y = resp_gil),
+              width = 0.15)+
+  geom_jitter(data = ~ .x[dataset == "original", ],
+              mapping = aes(x = as.factor(dataset), y = X8.2),
+              width = 0.15)
+
+agg_data_post[, .(mean(X8.2),
+                  median(X8.2),
+                  sd(X8.2)),
+              by = "dataset"]
+
+agg_data_post[, .(mean(resp_gil),
+                  median(resp_gil),
+                  sd(resp_gil)),
+              by = "dataset"]
+agg_data_post[X8.2 == 0, .N]
+
+species_scores[traits == "resp_gil" | traits == "X8.2", ]
 
 
-#### boxplot comparison ####
-# TODO: Needs improvement, especially label size
-class <- factor(ecor_R$salinisati)
-scl = 3
-colvec <- c("red", "orange", "green")
+## X2.1 - short life cycle duration
+ggplot(agg_data_post, aes(x = as.factor(dataset), y = X2.1)) +
+  geom_violin()+
+  geom_jitter()
 
-par(mar = c(5, 4, 4, 15))
-par(cex.lab=1.1) # is for y-axis
-par(cex.axis=1.1) # is for x-axis
-boxplot(
-  scores(trait_dat$not_aggregated$cwmRDA)$sites[, 1] ~ class,
-  ylab = "Scores on constrained axis",
-  xlab = "Position",
-  col = colors,
-  main = "RDA of traits constrained by electric conductivity using harmonized traits"
+agg_data_post[, .(mean(X2.1),
+                  median(X2.1),
+                  sd(X2.1)), by = "dataset"]
+
+species_scores[traits == "X2.1", ]
+
+## X2.2 - long life cycle duration
+ggplot(agg_data_post, aes(x = as.factor(dataset), y = X2.2)) +
+  geom_violin()+
+  geom_jitter()
+
+agg_data_post[, .(mean(X2.2),
+                  median(X2.2),
+                  sd(X2.2)), by = "dataset"]
+
+
+## final table for SI
+SI_responsetraits <- melt(agg_data_post,
+     measure.vars = c("feed_shredder",
+                      "X11.3",
+                      "resp_gil",
+                      "X8.2",
+                      "X2.1",
+                      "X2.2")) %>%
+  .[, .(
+    mean_trait_value = mean(value, na.rm = TRUE),
+    median_trait_value = median(value, na.rm = TRUE),
+    sd_trait_value = sd(value, na.rm = TRUE)
+  ),
+  by = .(dataset, variable)] %>%
+  .[!is.na(mean_trait_value) &
+      !is.na(median_trait_value) & !is.na(sd_trait_value),]
+
+SI_responsetraits[, variable := case_when(
+  variable %in% c("feed_shredder", "X11.3") ~ "Shredder",
+  variable %in% c("resp_gil", "X8.2") ~ "Gills",
+  variable == "X2.1" ~ "Short life cycle",
+  variable == "X2.2" ~ "Long life cylce"
+)]
+SI_responsetraits[,
+                  dataset := case_when(
+                    dataset == "not_aggregated" ~ "Harmonized; not_aggregated",
+                    TRUE ~ as.character(dataset)
+                  )]
+SI_responsetraits[, dataset := simple_cap(dataset)]
+
+cols <- c("mean_trait_value", "median_trait_value", "sd_trait_value")
+SI_responsetraits[, (cols) := lapply(.SD, function(y) round(y, digits = 2)),
+                  .SDcols = cols]
+
+setnames(SI_responsetraits,
+         c("dataset",
+           "variable",
+           cols),
+         c("Dataset",
+           "Trait",
+           "Mean",
+           "Median",
+           "SD"))
+
+# latex output
+xtable_wo_rownames(
+  SI_responsetraits,
+  caption = "",
+  label = "tab:SI_resp_traits_summary_stats"
 )
-abline(h = 0, lty = "dotted")
-rug(trait_dat_species_scores$RDA_species_scores, side = 4)
-linestack(
-  trait_high_sal[id == "not_aggregated", RDA_species_scores],
-  labels = paste(trait_high_sal[id == "not_aggregated", ID_trait_name],
-                 trait_high_sal[id == "not_aggregated", ID_name],
-                 sep = ":"),
-  at = par("usr")[2],
-  add = TRUE,
-  hoff = 1,
-  cex = 0.9
-)
 
 
-#### biplot ####
-plot(trait_dat$not_aggregated$cwmRDA, display = "sites", type = "none")
-points(
-  trait_dat$not_aggregated$cwmRDA,
-  display = "sites",
-  col = colvec[class],
-  pch = 25,
-  cex = 0.8
-)
-text(trait_dat$stepw_median$cwmRDA,
-     display = "bp",
-     col = "blue",
-     arrow.mul = 0.7)
-legend(
-  "topright",
-  legend = levels(class),
-  bty = "n",
-  col = colvec,
-  pch = 16
-)
-ordisurf(trait_dat$stepw_median$cwmRDA ~ cond, data = ecor_R, add = TRUE)
-plot(trait_dat$not_aggregated$cwmRDA)
-
-
-
+# # _________________________________________________________________________________________________
+# #### Biplot ####
+# # _________________________________________________________________________________________________
+# plot(trait_dat$not_aggregated$cwmRDA, display = "sites", type = "none")
+# points(
+#   trait_dat$not_aggregated$cwmRDA,
+#   display = "sites",
+#   col = colvec[class],
+#   pch = 25,
+#   cex = 0.8
+# )
+# text(trait_dat$stepw_median$cwmRDA,
+#      display = "bp",
+#      col = "blue",
+#      arrow.mul = 0.7)
+# legend(
+#   "topright",
+#   legend = levels(class),
+#   bty = "n",
+#   col = colvec,
+#   pch = 16
+# )
+# ordisurf(trait_dat$stepw_median$cwmRDA ~ cond, data = ecor_R, add = TRUE)
 
 

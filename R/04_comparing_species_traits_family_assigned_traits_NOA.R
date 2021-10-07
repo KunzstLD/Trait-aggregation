@@ -88,6 +88,7 @@ setnames(
 
 # harmonize locomotion so that this grouping features matches with the harmonized trait set
 # sessil does not exist as category
+# (values are mutual exclusive 0's or 1's, max and sum will result in the same outcome)
 noa_trait_matrix[, locom_swim := apply(.SD, 1, max),
   .SDcols = c("locom_swim", "locom_skate")
 ]
@@ -246,6 +247,10 @@ traitval_noa$order %>% table()
 unique(noa_trait_matrix$family) %in% unique(preproc_NOA$family) %>%
   sum()
 
+# save for later analysis
+saveRDS(object = unique(noa_trait_matrix$family), 
+        file = file.path(data_cache, "noa_unique_families.rds"))
+
 # _______________________________________________________________________
 #### Analysis ####
 # _______________________________________________________________________
@@ -281,6 +286,12 @@ traitval_noa_lf_diff[, `:=`(
 ),
 by = c("deviance.vars", "grouping.feature")
 ]
+traitval_noa_lf_diff[, deviance.vars := factor(deviance.vars, 
+                                               levels = c("deviance.weighted.fam", 
+                                                          "deviance.stepwise.mean.fam",
+                                                          "deviance.stepwise.median.fam",
+                                                          "deviance.direct.mean.fam",
+                                                          "deviance.direct.median.fam"))]
 
 # Overview plot differences ----
 grouping.feature_names <- c(
@@ -294,9 +305,9 @@ grouping.feature_names <- c(
 annotations <-
   cbind(
     traitval_noa_lf_diff[, .N, by = c("deviance.vars", "grouping.feature")],
-    data.frame(x = rep(1:5, each = 5), y = rep(1.25, 25))
+    data.frame(x = rep(5:1, each = 5), y = rep(1.25, 25))
   )
-annotations[, label := paste("N =", N)]
+annotations[, label := paste("n =", N)]
 
 # order of grouping features same as in the AUS comparison 
 traitval_noa_lf_diff[, grouping.feature := factor(grouping.feature,
@@ -304,7 +315,7 @@ traitval_noa_lf_diff[, grouping.feature := factor(grouping.feature,
 )]
 
 # plot
-traitval_noa_lf_diff %>%
+plot_aggr_assig_noa <- traitval_noa_lf_diff[grouping.feature %in% c("feed", "size"), ] %>%
   ggplot(., aes(x = as.factor(deviance.vars), y = abs.value)) +
   geom_violin(
     color = "gray45",
@@ -333,10 +344,10 @@ traitval_noa_lf_diff %>%
   scale_color_uchicago() +
   coord_flip() +
   facet_wrap(~grouping.feature,
-    labeller = as_labeller(grouping.feature_names)
+    labeller = as_labeller(grouping.feature_names[c("feed", "size")])
   ) +
   geom_text(
-    data = annotations, aes(
+    data = annotations[grouping.feature %in% c("feed", "size"), ], aes(
       x = x,
       y = y,
       label = label
@@ -345,14 +356,16 @@ traitval_noa_lf_diff %>%
     inherit.aes = FALSE,
     parse = FALSE
   ) +
-  labs(x = NULL, y = "Absolute difference", color = "Grouping feature") +
+  labs(x = "Aggergation method", 
+       y = "Absolute difference")+
+  ggtitle("NA") +
   scale_x_discrete(
     labels = c(
-      "Difference direct_agg (median) \n and traits assigned at family-level",
-      "Difference direct_agg (mean) \n and traits assigned at family-level",
-      "Difference stepwise_agg (median) \n and traits assigned at family-level",
-      "Difference stepwise_agg (mean) \n and traits assigned at family-level",
-      "Difference weighted_agg \n and traits assigned at family-level"
+      "Weighted_agg",
+      "Stepwise_agg \n (mean)",
+      "Stepwise_agg \n (median)",
+      "Direct_agg \n (mean)",
+      "Direct_agg \n (median)"
     )
   ) +
   expand_limits(y = c(0, 1.35)) +
@@ -360,11 +373,91 @@ traitval_noa_lf_diff %>%
   theme(
     legend.position = "none",
     axis.title = element_text(size = 12),
-    axis.text.x = element_text(family = "Roboto Mono", size = 9),
-    axis.text.y = element_text(family = "Roboto Mono", size = 9),
+    axis.text.x = element_text(family = "Roboto Mono", size = 11),
+    axis.text.y = element_text(family = "Roboto Mono", size = 11),
     # legend.title = element_text(size = 12),
     # legend.text = element_text(size = 11),
-    panel.grid = element_blank()
+    panel.grid = element_blank(),
+    strip.text = element_text(family = "Roboto Mono", size = 11)
+  )
+
+# combine plot with plot from AUS
+pl_combined <- plot_aggr_assig_aus/plot_aggr_assig_noa
+for (link in c(data_out, data_paper)) {
+  ggplot2::ggsave(
+    filename = file.path(link, "Deviances_trait_agg_combined.png"),
+    plot = pl_combined,
+    width = 24,
+    height = 17,
+    units = "cm"
+  )
+}
+
+# Create plot for SI with the remaining grouping features
+traitval_noa_lf_diff[grouping.feature %in% c("locom", "resp", "volt"), ] %>%
+  ggplot(., aes(x = as.factor(deviance.vars), y = abs.value)) +
+  geom_violin(
+    color = "gray45",
+    draw_quantiles = c(0.25, 0.5, 0.75)
+  ) +
+  geom_jitter(
+    size = 1.5,
+    width = 0.1,
+    alpha = 0.1,
+    #  aes(color = grouping.feature)
+  ) +
+  stat_summary(fun = mean, 
+               geom = "point",
+               size = 3.5,
+               color = "dodgerblue4")+
+  geom_errorbar(
+    aes(
+      x = as.factor(deviance.vars),
+      ymin = mean.abs.value - sd.abs.value,
+      ymax = mean.abs.value + sd.abs.value
+    ),
+    size = 0.7, 
+    width = 0.3,
+    color = "dodgerblue4"
+  ) +
+  scale_color_uchicago() +
+  coord_flip() +
+  facet_wrap(~grouping.feature,
+             labeller = as_labeller(grouping.feature_names[c("locom", "resp", "volt")])
+  ) +
+  geom_text(
+    data = annotations[grouping.feature %in% c("locom", "resp", "volt"), ], aes(
+      x = x,
+      y = y,
+      label = label
+    ),
+    colour = "black",
+    inherit.aes = FALSE,
+    parse = FALSE
+  ) +
+  labs(x = "Aggergation method", 
+       y = "Absolute difference")+
+  ggtitle("NA") +
+  scale_x_discrete(
+    labels = c(
+      "Weighted_agg",
+      "Stepwise_agg \n (mean)",
+      "Stepwise_agg \n (median)",
+      "Direct_agg \n (mean)",
+      "Direct_agg \n (median)"
+    )
+  ) +
+  expand_limits(y = c(0, 1.35)) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 12),
+    axis.text.x = element_text(family = "Roboto Mono", size = 11),
+    axis.text.y = element_text(family = "Roboto Mono", size = 11),
+    # legend.title = element_text(size = 12),
+    # legend.text = element_text(size = 11),
+    panel.grid = element_blank(),
+    strip.text = element_text(family = "Roboto Mono", size = 11)
   )
 for (link in c(data_out, data_paper)) {
   ggplot2::ggsave(
@@ -375,8 +468,43 @@ for (link in c(data_out, data_paper)) {
   )
 }
 
-# How many cases overall have been evaluated differently by Pyne? ----
+#### Maximum differences ####
+
+# Max differences NOA
+traitval_noa_lf_diff[abs.value == 1, summary(variable)] %>% 
+  .[order(-.)]
+
+# How many cases with maximum difference NOA
+traitval_noa_lf_diff[abs.value == 1, .N]/traitval_noa_lf_diff[, .N] * 100
+
+# size medium
+traitval_noa_lf_diff[abs.value == 1 & variable == "size_medium", .N] /
+  traitval_noa_lf_diff[abs.value == 1, .N] * 100
+
+# resp_pls_spi
+traitval_noa_lf_diff[abs.value == 1 & variable == "resp_pls_spi", .N] /
+  traitval_noa_lf_diff[abs.value == 1, .N] * 100
+
+# Mean and SD for all investigated traits
+traitval_noa_lf_diff[, .(mean_abs_by_var = mean(abs.value),
+                         sd_abs_by_var = sd(abs.value)),
+                     by = variable] %>%
+  .[order(mean_abs_by_var),]
+
+# How often?
+traitval_noa_lf_diff[, .N, by = variable] %>% 
+  .[order(-N), ] 
+
+#### Minimum differences - most "concsistent" traits ####
+traitval_noa_lf[value == 0, .N, by = variable] %>% 
+  .[order(-N)]
+
+
+
+#### Overall stats ####
+# How many cases overall have been evaluated differently by Pyne?
 # range of deviations
+# (Table 6 in paper)
 noa_result_tbl <- traitval_noa_lf_diff[, .(
   dev_cases = .N / traitval_noa[, .N] * 100,
   min_diff_affinity = min(abs.value),
@@ -397,83 +525,82 @@ idcol = "database"
 
 xtable_wo_rownames(final_tbl,
   caption = "",
-  digits = 3
+  digits = 2
 )
 
 # gt summary output
-traitval_gt <- tbl_summary(
-  data = traitval_noa_lf_diff[, -c(
-    "family",
-    "variable",
-    "grouping.feature",
-    "value.direct.agg.median",
-    "value.direct.agg.mean",
-    "value.stepwise.agg.median",
-    "value.stepwise.agg.mean",
-    "value.weighted.agg",
-    "value.famlvl"
-  )],
-  statistic = list(all_continuous() ~ "{mean} ({sd})"),
-  by = "deviance.vars",
-  label = list(
-    value ~ "Mean deviances",
-    abs.value ~ "Mean abs. deviances"
-  ),
-  digits = list(
-    value ~ c(3, 2),
-    abs.value ~ c(3, 2)
-  )
-) %>%
-  italicize_levels()
-
-# latex output
-xtable_wo_rownames(traitval_gt$table_body[, c("label", "stat_1", "stat_2")])
-
-#
-plot_list <- list()
-for (grf in unique(traitval_summary_noa$grouping_feature)) {
-  # range of deviances?
-  plot_list[[grf]] <- traitval_summary_noa[grouping_feature %in% grf, ] %>%
-    ggplot(., aes(x = order, y = deviance_dir_fam)) +
-    geom_point(size = 2) +
-    geom_jitter(
-      size = 1.5,
-      height = 0,
-      width = 0.15
-    ) +
-    geom_boxplot(alpha = 0.7) +
-    ylim(-1, 1) +
-    geom_hline(yintercept = 0, linetype = "dashed") +
-    labs(
-      x = "Order",
-      y = "Deviance in affinity"
-    ) +
-    coord_flip() +
-    facet_wrap(~variable) +
-    theme_light(base_size = 15) + # ,base_family = "Poppins"
-    theme(
-      legend.position = "none",
-      axis.title = element_text(size = 12),
-      axis.text.x = element_text(family = "Roboto Mono", size = 10),
-      axis.text.y = element_text(family = "Roboto Mono", size = 10)
-    )
-
-  # save
-  ggplot2::ggsave(
-    filename = file.path(
-      data_out,
-      paste0(
-        "Deviances_dir_median_noa_",
-        names(plot_list[grf]), ".png"
-      )
-    ),
-    width = 22,
-    height = 12,
-    units = "cm",
-    dpi = 800
-  )
-}
-
+# traitval_gt <- tbl_summary(
+#   data = traitval_noa_lf_diff[, -c(
+#     "family",
+#     "variable",
+#     "grouping.feature",
+#     "value.direct.agg.median",
+#     "value.direct.agg.mean",
+#     "value.stepwise.agg.median",
+#     "value.stepwise.agg.mean",
+#     "value.weighted.agg",
+#     "value.famlvl"
+#   )],
+#   statistic = list(all_continuous() ~ "{mean} ({sd})"),
+#   by = "deviance.vars",
+#   label = list(
+#     value ~ "Mean deviances",
+#     abs.value ~ "Mean abs. deviances"
+#   ),
+#   digits = list(
+#     value ~ c(3, 2),
+#     abs.value ~ c(3, 2)
+#   )
+# ) %>%
+#   italicize_levels()
+# 
+# # latex output
+# xtable_wo_rownames(traitval_gt$table_body[, c("label", "stat_1", "stat_2")])
+# 
+# # ?
+# plot_list <- list()
+# for (grf in unique(traitval_summary_noa$grouping_feature)) {
+#   # range of deviances?
+#   plot_list[[grf]] <- traitval_summary_noa[grouping_feature %in% grf, ] %>%
+#     ggplot(., aes(x = order, y = deviance_dir_fam)) +
+#     geom_point(size = 2) +
+#     geom_jitter(
+#       size = 1.5,
+#       height = 0,
+#       width = 0.15
+#     ) +
+#     geom_boxplot(alpha = 0.7) +
+#     ylim(-1, 1) +
+#     geom_hline(yintercept = 0, linetype = "dashed") +
+#     labs(
+#       x = "Order",
+#       y = "Deviance in affinity"
+#     ) +
+#     coord_flip() +
+#     facet_wrap(~variable) +
+#     theme_light(base_size = 15) + # ,base_family = "Poppins"
+#     theme(
+#       legend.position = "none",
+#       axis.title = element_text(size = 12),
+#       axis.text.x = element_text(family = "Roboto Mono", size = 10),
+#       axis.text.y = element_text(family = "Roboto Mono", size = 10)
+#     )
+# 
+#   # save
+#   ggplot2::ggsave(
+#     filename = file.path(
+#       data_out,
+#       paste0(
+#         "Deviances_dir_median_noa_",
+#         names(plot_list[grf]), ".png"
+#       )
+#     ),
+#     width = 22,
+#     height = 12,
+#     units = "cm",
+#     dpi = 800
+#   )
+# }
 
 
 # Which traits?

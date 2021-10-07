@@ -1,11 +1,8 @@
 #____________________________________________________________________________________________
-#### Re-analyzing Szöcs et al. 2014 - data processing ####
+# Re-analyzing Szöcs et al. 2014 - data processing ----
 #____________________________________________________________________________________________
 
-
-#_______________________________________
-#### Load and prepare data from Edi ####
-#_______________________________________
+# Load and prepare data from Szöces et al. 2014 ----
 ecor_data <- load_data(path = "./Data/Edi_salinity_study/cache",
                        pattern = "*.rds")
 
@@ -103,17 +100,28 @@ trait_ext_lookup <- rbind(trait_edi_lookup,
 tachet_edi <-
   fread(file.path("./Data/Edi_salinity_study/data/tachet.csv"),
         sep = ";")
-# create lookup vector
-# names are the keys
-# values are the vector entries
-# lookup_vec <- trait_edi_lookup$ID_name
-# names(lookup_vec) <- trait_edi_lookup$ID_trait
-# colnames(ecor_Q) <- unname(lookup_vec[colnames(ecor_Q)])
+
+# Prepare ecor_Q (original trait data): 
+# rm those traits from ecor_Q that have been harmonized:
+rm_col <-
+  trait_edi_lookup[ID_trait_name %like% "(?i)size|locom|feed|resp|repr|number.*cycles",
+                   ID_trait]
+ecor_Q <- ecor_Q[, !names(ecor_Q) %in% rm_col]
+
+# Normalize, could also use normalize_by_rowSum_df function
+# calc. number of traits per grouping feature
+vec <- sub("\\..*", "\\1", names(ecor_Q))
+blocks <- rle(vec)$lengths
+# convert to %-traits
+ecor_Q <- prep.fuzzy.var(ecor_Q, blocks)
+
+# create column for merge
+ecor_Q$taxa <- rownames(ecor_Q)
 
 
-#_______________________________________
-#### Preprocess European trait data ####
-#_______________________________________
+#____________________________________________________________________________________________
+# Preprocess European trait data ----
+#____________________________________________________________________________________________
 trait_dat <-
   load_data(path = "./Data/", pattern = "harmonized.*\\.rds")
 
@@ -150,20 +158,21 @@ setcolorder(
   )
 )
 
+# clean genus and family column from sp. (only for merging later!) 
+trait_eu_subset[is.na(species), genus := sub("(?i) Gen\\. sp\\.| sp\\.", "", genus)]
+trait_eu_subset[is.na(species) &
+                  is.na(genus), family := sub("(?i) Gen\\. sp\\.| sp\\.", "", family)]
 
-#_______________________________________
-#### Preparation for re-analysis ####
+#____________________________________________________________________________________________
+# Preparation for re-analysis ----
 # few taxa have to be re-named or re-assigned
-#_______________________________________
+#____________________________________________________________________________________________
 
 # Chaetopterygini to genus column
 trait_eu_subset[taxon_cp %like% "Chaetopterygini", genus := "Chaetopterygini"]
 
 # ORTHOCLADIINAE/DIAMESINAE is also PRODIAMESINAE
 trait_eu_subset[taxon_cp %like% "Orthocladiinae", genus := "Prodiamesinae"]
-
-# Pediciinae subfamily moved to genus
-# trait_eu_subset[taxon_cp %like% "Pediciinae.*", genus := "Pediciinae"]
 
 # Some taxa on subfamily level re-assigned to genus-lvl to merge them
 # later to ecor_Q
@@ -191,6 +200,7 @@ trait_cols <- grep("order|family|genus|species|tax.*",
                    names(trait_eu_subset),
                    value = TRUE,
                    invert = TRUE)
+
 agg_traits <- trait_eu_subset[family %in% c(
   "Ceratopogonidae",
   "Empididae",
@@ -204,7 +214,9 @@ agg_traits <- trait_eu_subset[family %in% c(
   "Tubificidae",
   "Limnephilidae",
   "Coenagrionidae"
-), lapply(.SD, median, na.rm = TRUE), .SDcols = trait_cols, by = "family"] %>%
+), lapply(.SD, median, na.rm = TRUE), 
+.SDcols = trait_cols, 
+by = "family"] %>%
   normalize_by_rowSum(
     x = .,
     non_trait_cols = c("order",
@@ -262,12 +274,6 @@ trait_eu_sal <- rbind(trait_eu_subset,
                       crit_taxa,
                       fill = TRUE)
 
-# few NA values in traits: set to 0 (according to Edi's Paper, missing information
-# for traits was set to 0)
-for(j in trait_cols) {
-  data.table::set(trait_eu_sal, which(is.na(trait_eu_sal[[j]])), j, 0)
-}
-
 # change col order so that all trait columns of one grouping features
 # are next to each other
 setcolorder(
@@ -283,37 +289,31 @@ setcolorder(
   )
 )
 
-# rm those traits from ecor_Q that have been harmonized:
-rm_col <-
-  trait_edi_lookup[ID_trait_name %like% "(?i)size|locom|feed|resp|repr|number.*cycles",
-                   ID_trait]
-ecor_Q <- ecor_Q[, !names(ecor_Q) %in% rm_col]
-
-# Normalize, could also use normalize_by_rowSum_df function
-# calc. number of traits per grouping feature
-vec <- sub("\\..*", "\\1", names(ecor_Q))
-blocks <- rle(vec)$lengths
-# convert to %-traits
-ecor_Q <- prep.fuzzy.var(ecor_Q, blocks)
-
-# merge to trait_eu_sal
-ecor_Q$taxa <- rownames(ecor_Q)
+# merge trait_eu_sal and ecor_Q
 trait_eu_sal <- base::merge(trait_eu_sal,
                             ecor_Q,
                             by = "taxa")
+
 # rm duplicates
 trait_eu_sal <- trait_eu_sal[!duplicated(taxa)]
+
 
 # check if all taxa are covered
 # rownames(ecor_Q)[!rownames(ecor_Q) %in% trait_eu_sal$taxa]
 
+# few NA values in traits: set to 0 (according to Edi's Paper, missing information
+# for traits was set to 0)
+for(j in trait_cols) {
+  data.table::set(trait_eu_sal, which(is.na(trait_eu_sal[[j]])), j, 0)
+}
 
-#_____________________________________________________________________________________
-#### Create aggregated versions ####
-#_____________________________________________________________________________________
+
+#____________________________________________________________________________________________
+# Create aggregated versions ----
+#____________________________________________________________________________________________
 
 # ___________________________________________________________________
-# original data ####
+## Original data ----
 # ___________________________________________________________________
 
 # order alphabetically
@@ -330,7 +330,7 @@ ecor_Q_cp <- prep.fuzzy.var(ecor_Q_cp, blocks)
 
 
 # ___________________________________________________________________
-# stepwise agg median ####
+## Stepwise agg median ----
 # ___________________________________________________________________
 eu_sal_stepwise_median <- spec_genus_agg_alt(
   trait_data = trait_eu_sal,
@@ -363,7 +363,7 @@ rownames(eu_sal_stepwise_median) <- eu_sal_stepwise_median$taxa
 eu_sal_stepwise_median$taxa <- NULL
 
 # ___________________________________________________________________
-# stepwise agg mean ####
+## Stepwise agg mean ----
 # ___________________________________________________________________
 eu_sal_stepwise_mean <- spec_genus_agg_alt(
   trait_data = trait_eu_sal,
@@ -397,7 +397,7 @@ eu_sal_stepwise_mean$taxa <- NULL
 
 
 # ___________________________________________________________________
-# direct agg median ###
+## Direct agg median ----
 # ___________________________________________________________________
 eu_sal_direct_median <- direct_agg(
   trait_data = trait_eu_sal,
@@ -431,7 +431,7 @@ eu_sal_direct_median$taxa <- NULL
 
 
 # ___________________________________________________________________
-# direct agg mean ####
+## Direct agg mean ----
 # ___________________________________________________________________
 eu_sal_direct_mean <- direct_agg(
   trait_data = trait_eu_sal,
@@ -465,7 +465,7 @@ eu_sal_direct_mean$taxa <- NULL
 
 
 # ___________________________________________________________________
-# weighted agg ####
+## Weighted agg ----
 # ___________________________________________________________________
 eu_sal_weighted <- weighted_agg(
   trait_data = trait_eu_sal,
@@ -498,7 +498,7 @@ eu_sal_weighted$taxa <- NULL
 
 
 # ___________________________________________________________________
-# not aggregated but harmonized ####
+## Not aggregated but harmonized -----
 # ___________________________________________________________________
 
 # create dataset with taxonomical information
@@ -516,9 +516,9 @@ rownames(trait_eu_sal) <- trait_eu_sal$taxa
 trait_eu_sal$taxa <- NULL
 
 
-# ___________________________________________________________________
-#### Final data processing ####
-# ___________________________________________________________________
+#____________________________________________________________________________________________
+# Final data processing ----
+#____________________________________________________________________________________________
 
 # Abundance data and ecor_Q_cp need to be ordered
 # in the same way as the other datasets (otherwise weighted
@@ -541,7 +541,20 @@ agg_data <- lapply(agg_data, function(y) normalize_by_rowSum_df(y))
 
 # save
 saveRDS(object = agg_data, 
-        file = file.path("./Data/Re-analysis_cache/agg_data.rds"))
+        file = file.path("./Cache/Re-analysis_cache/agg_data.rds"))
+
+# save corrected ecor data
+ecor_crr <- list("ecor_L" = ecor_L,
+                 "ecor_Q" = ecor_Q,
+                 "ecor_R" = ecor_R,
+                 "ordos" = ordos)
+
+for(i in seq_along(ecor_crr)) {
+  saveRDS(
+    object = ecor_crr[[i]],
+    file = paste0("./Cache/Re-analysis_cache/", names(ecor_crr[i]), "_corr.rds")
+  )
+}
 
 # test how similar aggregated columns are
 test <- rbindlist(agg_data[1:6], use.names = TRUE,

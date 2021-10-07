@@ -12,7 +12,12 @@ library(zeallot)
 # plotting & arranging plots
 library(ggplot2) 
 library(ggsci) 
-library(cowplot)  
+library(cowplot)
+library(gridGraphics)
+library(ggpubr)
+library(ggrepel)
+library(patchwork)
+library(ggthemes)
 # library(plotly)
 
 # data summaries
@@ -22,9 +27,12 @@ library(Hmisc)
 # unit tests
 library(testthat) 
 
-# trait analysis
+# trait analysis & functional analysis
 library(ade4) 
 library(vegan) 
+library(FD)
+library(ade4)
+library(adegraphics)
 
 # convert R output to Latex output
 library(xtable) 
@@ -35,8 +43,14 @@ library(truncnorm)
 # source script with used functions
 source(file = file.path(".", "R", "used_functions.R"))
 
+# intermediate data
+data_cache <- "./Cache"
+
 # data output path
 data_out <- "./Output"
 
 # output for paper
-data_paper <- "/home/kunzst/Dokumente/Projects/Trait_DB/Invertebrate_traits/Paper/Figures"
+data_paper <- "/home/kunzst/Dokumente/Projects/Trait_DB/Invertebrate_traits/Paper/Submission_new/Figures"
+
+# to r scripts
+path_src <- "./R"
