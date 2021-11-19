@@ -1,5 +1,3 @@
-
-
 # ____________________________________________________________________________________________
 # Analyse functional diversity metrics
 # - functional richness: functional space filled (most extreme points of convex hull)

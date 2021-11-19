@@ -149,7 +149,7 @@ site_scores[id == "original", RDA_site_scores := RDA_site_scores*(-1)]
 # Results suggest that harmonization changed slightly the result
 # aggregation methods seem not to change anything from the harmonized version
 
-# Mahalanoblis distance 
+# Mahalanobis distance 
 species_scores[, maha_dist := dist_to_axis(x = RDA_species_scores), by = "id"]
 
 # traits responding to either extreme high or low salinity
@@ -176,7 +176,7 @@ ggplot(species_scores,
   ) +
   ylim(c(-0.6, 0.55)) +
   coord_flip() +
-  labs(y = "RDA species scores") +
+  labs(y = "RDA species scores", x = "") +
   scale_x_discrete(
     labels = c(
       "Weighted_agg",
@@ -198,10 +198,12 @@ ggplot(species_scores,
   )
 for (path in c(data_out, data_paper)) {
   ggplot2::ggsave(
-    filename = file.path(path, "Species_scores_rda.png"),
+    filename = file.path(path, "Species_scores_rda.pdf"),
     width = 22,
     height = 12,
-    units = "cm"
+    units = "cm",
+    device = cairo_pdf,
+    dpi = 400
   )
 }
 # For graphical display of species and site scores

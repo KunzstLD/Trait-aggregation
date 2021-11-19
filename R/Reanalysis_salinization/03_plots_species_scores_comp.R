@@ -62,11 +62,13 @@ final_dir_mean <- plot_dir_mean|axis_dir_mean
 scr_combined <- final_orig/final_not_aggr|final_stepw_median/final_dir_mean
 for (path in c(data_out, data_paper)) {
   ggplot2::ggsave(
-    filename = file.path(path, "boxplot_scores_combined.png"),
+    filename = file.path(path, "boxplot_scores_combined.pdf"),
     plot = scr_combined,
     width = 27.5,
     height = 22,
-    units = "cm"
+    units = "cm",
+    device = cairo_pdf,
+    dpi = 400
   )
 }
 

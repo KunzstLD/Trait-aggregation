@@ -136,9 +136,6 @@ taxa_diff_weighted <-
 xtable_wo_rownames(x = taxa_diff_weighted, auto = TRUE)
 
 # _____________________________________________________________________________
-
-
-
 #### Range of deviance #### 
 # _____________________________________________________________________________
 look_up_db <- data.table(

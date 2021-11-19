@@ -385,11 +385,13 @@ plot_aggr_assig_noa <- traitval_noa_lf_diff[grouping.feature %in% c("feed", "siz
 pl_combined <- plot_aggr_assig_aus/plot_aggr_assig_noa
 for (link in c(data_out, data_paper)) {
   ggplot2::ggsave(
-    filename = file.path(link, "Deviances_trait_agg_combined.png"),
+    filename = file.path(link, "Deviances_trait_agg_combined.pdf"),
     plot = pl_combined,
     width = 24,
     height = 17,
-    units = "cm"
+    units = "cm",
+    device = cairo_pdf, 
+    dpi = 400
   )
 }
 

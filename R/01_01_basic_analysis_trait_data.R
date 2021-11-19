@@ -110,6 +110,7 @@ setcolorder(
 )
 
 # latex output
+# table 3 in publication
 xtable_wo_rownames(
   x = completeness_output,
   caption = "Percentage of entries that have
@@ -217,6 +218,7 @@ TaxCoverage[, c("species_rf",
                 "aq_insects_rf") := NULL]
 
 # latex output 
+# table 2 in publication
 xtable_wo_rownames(x = TaxCoverage,
                    caption = "",
                    label = "tab:tax_coverage",

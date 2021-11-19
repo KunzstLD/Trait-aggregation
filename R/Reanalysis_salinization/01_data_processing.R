@@ -556,20 +556,20 @@ for(i in seq_along(ecor_crr)) {
   )
 }
 
-# test how similar aggregated columns are
-test <- rbindlist(agg_data[1:6], use.names = TRUE,
-                  idcol = "approach")
-res <- list()
-for(cols in names(test)[-1]) {
-  res[[cols]] <-
-    test[, {
-      x = get(cols)
-      test[, .(cor(x, get(cols))), by = approach]
-    },
-    by = approach]
-}
-
-# most correlation values seem very high
-lapply(res, function(y) y[V1 != 1,
-                          mean(V1, na.rm = TRUE),
-                          by = "approach"])
+# # test how similar aggregated columns are
+# test <- rbindlist(agg_data[1:6], use.names = TRUE,
+#                   idcol = "approach")
+# res <- list()
+# for(cols in names(test)[-1]) {
+#   res[[cols]] <-
+#     test[, {
+#       x = get(cols)
+#       test[, .(cor(x, get(cols))), by = approach]
+#     },
+#     by = approach]
+# }
+# 
+# # most correlation values seem very high
+# lapply(res, function(y) y[V1 != 1,
+#                           mean(V1, na.rm = TRUE),
+#                           by = "approach"])
