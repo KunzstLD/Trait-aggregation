@@ -6,8 +6,8 @@
 # Rproj data
 *.Rproj
 
-# Data folder
-Data/
+# Some data folders
+Data/Avit/
 
 # Output graphics folder
 Output/
