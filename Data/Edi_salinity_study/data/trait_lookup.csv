@@ -1,0 +1,114 @@
+ID;ID_name;ID_trait;ID_trait_name
+1;≤ .25 cm;1.1;Maximal potential size
+1;> .25-.5 cm;1.2;Maximal potential size
+1;> .5-1 cm;1.3;Maximal potential size
+1;> 1-2 cm;1.4;Maximal potential size
+1;> 2-4 cm;1.5;Maximal potential size
+1;> 4-8 cm;1.6;Maximal potential size
+1;> 8 cm;1.7;Maximal potential size
+10;microorganisms;10.1;Food
+10;detritus (< 1mm);10.2;Food
+10;dead plant (>= 1mm);10.3;Food
+10;living microphytes;10.4;Food
+10;living macrophytes;10.5;Food
+10;dead animal (>= 1mm);10.6;Food
+10;living microinvertebrates;10.7;Food
+10;living macroinvertebrates;10.8;Food
+10;vertebrates;10.9;Food
+11;absorber;11.1;Feeding habits
+11;deposit feeder;11.2;Feeding habits
+11;shredder;11.3;Feeding habits
+11;scraper;11.4;Feeding habits
+11;filter-feeder;11.5;Feeding habits
+11;piercer;11.6;Feeding habits
+11;predator;11.7;Feeding habits
+11;parasite;11.8;Feeding habits
+12;river channel;12.1;Transversal distribution
+12;banks, connected side-arms;12.2;Transversal distribution
+12;ponds, pools, disconnected side-arms;12.3;Transversal distribution
+12;marshes, peat bogs;12.4;Transversal distribution
+12;temporary waters;12.5;Transversal distribution
+12;lakes;12.6;Transversal distribution
+12;groundwaters;12.7;Transversal distribution
+13;crenon;13.1;Longitudinal distribution
+13;epirithron;13.2;Longitudinal distribution
+13;metarithron;13.3;Longitudinal distribution
+13;hyporithron;13.4;Longitudinal distribution
+13;epipotamon;13.5;Longitudinal distribution
+13;metapotamon;13.6;Longitudinal distribution
+13;estuary;13.7;Longitudinal distribution
+13;outside river system;13.8;Longitudinal distribution
+14;lowlands;14.1;Altitude
+14;piedmont level;14.2;Altitude
+14;alpine level;14.3;Altitude
+15;flags/boulders/cobbles/pebbles;15.1;Substrate (preferendum)
+15;gravel;15.2;Substrate (preferendum)
+15;sand;15.3;Substrate (preferendum)
+15;silt;15.4;Substrate (preferendum)
+15;macrophytes;15.5;Substrate (preferendum)
+15;microphytes;15.6;Substrate (preferendum)
+15;twigs/roots;15.7;Substrate (preferendum)
+15;organic detritus/litter;15.8;Substrate (preferendum)
+15;mud;15.9;Substrate (preferendum)
+16;null;16.1;Current velocity (preferendum)
+16;slow (< 25 cm/s);16.2;Current velocity (preferendum)
+16;medium (25-50 cm</s);16.3;Current velocity (preferendum)
+16;fast (> 50 cm/s);16.4;Current velocity (preferendum)
+17;oligotrophic;17.1;Trophic status (preferendum)
+17;mesotrophic;17.2;Trophic status (preferendum)
+17;eutrophic;17.3;Trophic status (preferendum)
+18;freshwater;18.1;Salinity (preferendum)
+18;brackish water;18.2;Salinity (preferendum)
+19;cold (< 15°C);19.1;Temperature (preferendum)
+19;warm (> 15°C);19.2;Temperature (preferendum)
+19;eurythermic;19.3;Temperature (preferendum)
+2;≤ 1 year;2.1;Life cycle duration
+2;> 1 year;2.2;Life cycle duration
+20;xenosaprobic;20.1;Saprobity
+20;oligosaprobic;20.2;Saprobity
+20;b-mesosaprobic;20.3;Saprobity
+20;a-mesosaprobic;20.4;Saprobity
+20;polysaprobic;20.5;Saprobity
+21;≤ 4;21.1;pH (preferendum)
+21;> 4-4.5;21.2;pH (preferendum)
+21;> 4.5-5;21.3;pH (preferendum)
+21;> 5-5.5;21.4;pH (preferendum)
+21;> 5.5-6;21.5;pH (preferendum)
+21;> 6;21.6;pH (preferendum)
+3;< 1;3.1;Potential number of cycles per year
+3;1;3.2;Potential number of cycles per year
+3;> 1;3.3;Potential number of cycles per year
+4;egg;4.1;Aquatic stages
+4;larva;4.2;Aquatic stages
+4;nymph;4.3;Aquatic stages
+4;adult;4.4;Aquatic stages
+5;ovoviviparity;5.1;Reproduction
+5;isolated eggs, free;5.2;Reproduction
+5;isolated eggs, cemented;5.3;Reproduction
+5;clutches, cemented or fixed;5.4;Reproduction
+5;clutches, free;5.5;Reproduction
+5;clutches, in vegetation;5.6;Reproduction
+5;clutches, terrestrial;5.7;Reproduction
+5;asexual reproduction;5.8;Reproduction
+6;aquatic passive;6.1;Dispersal
+6;aquatic active;6.2;Dispersal
+6;aerial passive;6.3;Dispersal
+6;aerial active;6.4;Dispersal
+7;eggs, statoblasts;7.1;Resistance forms
+7;cocoons;7.2;Resistance forms
+7;housings against desiccation;7.3;Resistance forms
+7;diapause or dormancy;7.4;Resistance forms
+7;none;7.5;Resistance forms
+8;tegument;8.1;Respiration
+8;gill;8.2;Respiration
+8;plastron;8.3;Respiration
+8;spiracle;8.4;Respiration
+8;hydrostatic vesicle;8.5;Respiration
+9;flier;9.1;Locomotion and substrate relation
+9;surface swimmer;9.2;Locomotion and substrate relation
+9;full water swimmer;9.3;Locomotion and substrate relation
+9;crawler;9.4;Locomotion and substrate relation
+9;burrower;9.5;Locomotion and substrate relation
+9;interstitial;9.6;Locomotion and substrate relation
+9;temporarily attached;9.7;Locomotion and substrate relation
+9;permanently attached;9.8;Locomotion and substrate relation
